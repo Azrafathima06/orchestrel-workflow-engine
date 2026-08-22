@@ -5,6 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.routes import runs, workflows
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
 
@@ -55,6 +56,9 @@ def create_app() -> FastAPI:
             duration_ms=duration_ms,
         )
         return response
+
+    app.include_router(workflows.router)
+    app.include_router(runs.router)
 
     @app.get("/health")
     async def health() -> dict[str, str]:

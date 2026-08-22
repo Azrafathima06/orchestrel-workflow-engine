@@ -15,8 +15,10 @@ import os
 from collections.abc import Generator
 
 import pytest
-from sqlalchemy import Engine, create_engine
-from sqlalchemy.orm import Session
+from sqlalchemy import Engine, create_engine, text
+from sqlalchemy.orm import Session, sessionmaker
+
+from tests.integration.factories import TEST_KEY_PREFIX
 
 # Host-side test default: the Compose postgres service is published to
 # localhost:5432 specifically for local tooling (see docker-compose.yml).
@@ -49,3 +51,44 @@ def db_session(engine: Engine) -> Generator[Session, None, None]:
         if transaction.is_active:
             transaction.rollback()
         connection.close()
+
+
+@pytest.fixture
+def session_factory(engine):
+    """A real, committing session factory.
+
+    Distinct from `db_session`: the reconciler and runner open and commit
+    their own short transactions by design, so they cannot be driven from
+    inside a test-owned transaction that gets rolled back. Tests using this
+    fixture write real rows and rely on `cleanup_test_data` to remove them.
+    """
+    return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
+
+
+@pytest.fixture(autouse=True)
+def cleanup_test_data(engine):
+    """Remove rows created by the fixture factories, before and after each test.
+
+    Scoped by the TEST_KEY_PREFIX on workflow_definition.key so seeded
+    production workflows in the same development database are never touched.
+    task_run and task_attempt disappear via ON DELETE CASCADE from
+    workflow_run.
+    """
+
+    def purge() -> None:
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "DELETE FROM workflow_run WHERE definition_id IN "
+                    "(SELECT id FROM workflow_definition WHERE key LIKE :p)"
+                ),
+                {"p": f"{TEST_KEY_PREFIX}%"},
+            )
+            conn.execute(
+                text("DELETE FROM workflow_definition WHERE key LIKE :p"),
+                {"p": f"{TEST_KEY_PREFIX}%"},
+            )
+
+    purge()
+    yield
+    purge()

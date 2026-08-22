@@ -15,6 +15,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.states import AttemptStatus, TaskStatus, TriggerType, WorkflowStatus
 from app.db.models import TaskAttempt, TaskRun, WorkflowDefinition, WorkflowRun
+from tests.integration.factories import TEST_KEY_PREFIX
 
 EXPECTED_TABLES = {
     "workflow_definition",
@@ -46,7 +47,12 @@ def _seed_spec() -> dict:
     }
 
 
-def _make_definition(session, key: str = "sequential_etl") -> WorkflowDefinition:
+def _make_definition(session, key: str | None = None) -> WorkflowDefinition:
+    # Unique by default: this suite shares a database with the seeded
+    # production workflow definitions, so a hardcoded key would collide
+    # with the real `sequential_etl` row. Callers testing the uniqueness
+    # constraint itself pass an explicit key.
+    key = key or f"{TEST_KEY_PREFIX}schema_{uuid.uuid4().hex[:8]}"
     definition = WorkflowDefinition(key=key, version=1, name="Sequential ETL", spec=_seed_spec())
     session.add(definition)
     session.flush()
@@ -90,21 +96,27 @@ class TestWorkflowDefinitionPersistence:
         fetched = db_session.get(WorkflowDefinition, definition.id)
 
         assert fetched is not None
-        assert fetched.key == "sequential_etl"
+        assert fetched.key == definition.key
         assert fetched.spec["tasks"][0]["handler"] == "demo.extract"
         assert fetched.is_active is True
         assert fetched.created_at is not None
         assert fetched.created_at.tzinfo is not None  # timestamptz, not naive
 
     def test_key_uniqueness_enforced(self, db_session) -> None:
-        _make_definition(db_session, key="dup")
-        db_session.add(WorkflowDefinition(key="dup", version=1, name="Dup", spec={}))
+        _make_definition(db_session, key=f"{TEST_KEY_PREFIX}dup")
+        db_session.add(
+            WorkflowDefinition(key=f"{TEST_KEY_PREFIX}dup", version=1, name="Dup", spec={})
+        )
 
         with pytest.raises(IntegrityError):
             db_session.flush()
 
     def test_version_check_constraint_rejects_zero(self, db_session) -> None:
-        db_session.add(WorkflowDefinition(key="bad_version", version=0, name="Bad", spec={}))
+        db_session.add(
+            WorkflowDefinition(
+                key=f"{TEST_KEY_PREFIX}bad_version", version=0, name="Bad", spec={}
+            )
+        )
 
         with pytest.raises(IntegrityError):
             db_session.flush()

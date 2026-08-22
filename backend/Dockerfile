@@ -19,8 +19,13 @@ COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-install-project --no-dev
 
-# Application layer
+# Application layer. alembic/ and workflows/ are part of the runtime
+# image, not just build inputs: the same image runs the `migrate` and
+# `seed` Compose services.
 COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./alembic.ini
+COPY workflows ./workflows
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 

@@ -33,6 +33,16 @@ class Settings(BaseSettings):
     scheduler_tick_seconds: int = 30
     broker_visibility_timeout: int = 900
 
+    # Upper bound on a handler's serialized JSON output before we refuse to
+    # persist it. task_run.output is JSONB in a free-tier database; a handler
+    # returning a whole dataset instead of a summary is a bug we want to
+    # surface loudly, not silently truncate.
+    max_task_output_bytes: int = 131072
+
+    # Task lease headroom, added to a task's own timeout_seconds when a
+    # worker claims an attempt. Consumed by the M5 recovery sweeper.
+    lease_seconds_default: int = 300
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

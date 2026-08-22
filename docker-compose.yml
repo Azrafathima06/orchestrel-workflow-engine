@@ -26,6 +26,37 @@ services:
       timeout: 5s
       retries: 10
 
+  # Startup is explicitly staged so nothing races schema creation:
+  #   postgres healthy -> migrate -> seed -> (api, worker)
+  # Both migrate and seed are idempotent and exit 0, so `up` is repeatable.
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: alembic upgrade head
+    env_file:
+      - .env
+    environment: &backend_env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-workflow}:${POSTGRES_PASSWORD:-workflow}@postgres:5432/${POSTGRES_DB:-workflow_engine}
+      BROKER_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  seed:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -m app.seed
+    env_file:
+      - .env
+    environment: *backend_env
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
   api:
     build:
       context: ./backend
@@ -35,16 +66,43 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-workflow}:${POSTGRES_PASSWORD:-workflow}@postgres:5432/${POSTGRES_DB:-workflow_engine}
-      BROKER_URL: redis://redis:6379/0
+    environment: *backend_env
     volumes:
       - ./backend/app:/app/app
     depends_on:
-      postgres:
-        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # --concurrency=1: one execution slot per container, so worker_id
+    # ("hostname:pid") maps one-to-one onto a container. Distribution
+    # evidence is then unambiguous — N distinct worker_ids means N distinct
+    # containers actually executed work, with no ambiguity about whether
+    # they were prefork children of a single process.
+    # -Q tasks,orchestrator: both queues on the same worker pool locally.
+    command: >
+      celery -A app.worker.celery_app worker
+      --loglevel=info
+      --concurrency=1
+      -Q tasks,orchestrator
+    env_file:
+      - .env
+    environment: *backend_env
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    # NOTE: deliberately no `container_name` and no host port mapping.
+    # Either one makes the service unscalable, and this is the service we
+    # scale: `docker compose up -d --scale worker=3`.
 
 volumes:
   postgres_data:

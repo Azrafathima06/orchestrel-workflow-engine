@@ -1,0 +1,35 @@
+{
+  "key": "sequential_etl",
+  "name": "Sequential ETL",
+  "description": "Four-stage linear pipeline demonstrating strict dependency ordering and output passing between tasks. Each stage regenerates its data deterministically from the previous stage's descriptor and independently verifies the upstream result.",
+  "defaults": {
+    "retry": { "max_attempts": 1 },
+    "timeout_seconds": 120
+  },
+  "tasks": [
+    {
+      "key": "extract",
+      "handler": "etl.extract",
+      "params": { "seed": 42, "record_count": 4000 },
+      "depends_on": []
+    },
+    {
+      "key": "transform",
+      "handler": "etl.transform",
+      "params": { "scale": 3 },
+      "depends_on": ["extract"]
+    },
+    {
+      "key": "validate",
+      "handler": "etl.validate",
+      "params": { "max_value": 1000003 },
+      "depends_on": ["transform"]
+    },
+    {
+      "key": "load",
+      "handler": "etl.load",
+      "params": {},
+      "depends_on": ["validate"]
+    }
+  ]
+}

@@ -5,8 +5,10 @@
 # the api/worker containers use.
 LOCAL_DATABASE_URL := postgresql+psycopg://workflow:workflow@localhost:5432/workflow_engine
 
+# Three workers by default so fan-out genuinely lands on distinct
+# containers rather than only looking distributed.
 dev:
-	docker compose up --build
+	docker compose up --build --scale worker=3
 
 down:
 	docker compose down

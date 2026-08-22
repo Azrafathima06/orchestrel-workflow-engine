@@ -13,6 +13,7 @@ dependencies = [
     "structlog>=24.4,<25",
     "redis>=5.1,<6",
     "alembic>=1.14,<2",
+    "celery>=5.4,<6",
 ]
 
 [dependency-groups]
@@ -33,6 +34,12 @@ extend-exclude = ["alembic/versions"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.flake8-bugbear]
+# FastAPI's dependency-injection idiom is `x: T = Depends(...)` in the
+# signature. B008 flags function calls in argument defaults, which is the
+# right rule in general but wrong for these specific FastAPI markers.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Query", "fastapi.Path", "fastapi.Body"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

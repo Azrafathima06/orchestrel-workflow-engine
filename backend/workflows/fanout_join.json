@@ -1,0 +1,47 @@
+{
+  "key": "fanout_join",
+  "name": "Parallel Fan-out / Fan-in",
+  "description": "Splits a deterministic keyspace into four partitions processed concurrently by independent workers, then merges the shard summaries and verifies the combined aggregate against a single-pass recomputation.",
+  "defaults": {
+    "retry": { "max_attempts": 1 },
+    "timeout_seconds": 120
+  },
+  "tasks": [
+    {
+      "key": "split",
+      "handler": "shard.split",
+      "params": { "seed": 7, "total_records": 12000, "shard_count": 4 },
+      "depends_on": []
+    },
+    {
+      "key": "shard_0",
+      "handler": "shard.process",
+      "params": { "index": 0 },
+      "depends_on": ["split"]
+    },
+    {
+      "key": "shard_1",
+      "handler": "shard.process",
+      "params": { "index": 1 },
+      "depends_on": ["split"]
+    },
+    {
+      "key": "shard_2",
+      "handler": "shard.process",
+      "params": { "index": 2 },
+      "depends_on": ["split"]
+    },
+    {
+      "key": "shard_3",
+      "handler": "shard.process",
+      "params": { "index": 3 },
+      "depends_on": ["split"]
+    },
+    {
+      "key": "merge",
+      "handler": "shard.merge",
+      "params": {},
+      "depends_on": ["shard_0", "shard_1", "shard_2", "shard_3"]
+    }
+  ]
+}
