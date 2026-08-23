@@ -2,15 +2,25 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.aggregates import retry_counts_for_runs, task_counts_for_runs
 from app.api.deps import get_dispatcher
-from app.api.schemas import RunDetail, TriggerRunRequest, WorkflowDetail, WorkflowSummary
-from app.api.serializers import run_to_detail
-from app.core.states import TriggerType
-from app.db.models import WorkflowDefinition
+from app.api.errors import AppError
+from app.api.schemas import (
+    RunDetail,
+    RunSummary,
+    TriggerRunRequest,
+    WorkflowDetail,
+    WorkflowNode,
+    WorkflowSummary,
+)
+from app.api.serializers import run_to_detail, run_to_summary, spec_snapshot_to_edges
+from app.core.spec import WorkflowSpec
+from app.core.states import TriggerType, WorkflowStatus
+from app.db.models import WorkflowDefinition, WorkflowRun
 from app.db.session import get_db
 from app.logging import get_logger
 from app.orchestration.dispatch import Dispatcher
@@ -19,14 +29,43 @@ from app.orchestration.materialize import create_run
 router = APIRouter(prefix="/api/v1/workflows", tags=["workflows"])
 logger = get_logger(__name__)
 
+# How many recent runs count toward a workflow's "recent success/failure"
+# summary on the list page. Small and fixed: cheap to compute, and a
+# workflow's health right now matters more than its all-time history.
+RECENT_RUN_WINDOW = 20
+
 
 def _get_definition(db: Session, key: str) -> WorkflowDefinition:
     definition = db.execute(
         select(WorkflowDefinition).where(WorkflowDefinition.key == key)
     ).scalar_one_or_none()
     if definition is None:
-        raise HTTPException(status_code=404, detail=f"unknown workflow '{key}'")
+        raise AppError("workflow_not_found", f"unknown workflow '{key}'", status_code=404)
     return definition
+
+
+def _recent_runs(db: Session, definition_id, limit: int) -> list[WorkflowRun]:
+    return (
+        db.execute(
+            select(WorkflowRun)
+            .where(WorkflowRun.definition_id == definition_id)
+            .order_by(WorkflowRun.created_at.desc(), WorkflowRun.id.desc())
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+
+def _runs_to_summaries(
+    db: Session, runs: list[WorkflowRun], workflow_name: str
+) -> list[RunSummary]:
+    run_ids = [r.id for r in runs]
+    counts = task_counts_for_runs(db, run_ids)
+    retries = retry_counts_for_runs(db, run_ids)
+    return [
+        run_to_summary(r, workflow_name, counts[r.id], retries[r.id]) for r in runs
+    ]
 
 
 @router.get("", response_model=list[WorkflowSummary])
@@ -34,22 +73,50 @@ def list_workflows(db: Session = Depends(get_db)) -> list[WorkflowSummary]:
     definitions = (
         db.execute(select(WorkflowDefinition).order_by(WorkflowDefinition.key)).scalars().all()
     )
-    return [
-        WorkflowSummary(
-            key=d.key,
-            name=d.name,
-            description=d.description,
-            version=d.version,
-            is_active=d.is_active,
-            task_count=len(d.spec.get("tasks", [])),
+
+    result: list[WorkflowSummary] = []
+    for d in definitions:
+        recent = _recent_runs(db, d.id, RECENT_RUN_WINDOW)
+        summaries = _runs_to_summaries(db, recent, d.name)
+        result.append(
+            WorkflowSummary(
+                key=d.key,
+                name=d.name,
+                description=d.description,
+                version=d.version,
+                is_active=d.is_active,
+                task_count=len(d.spec.get("tasks", [])),
+                last_run=summaries[0] if summaries else None,
+                recent_success_count=sum(
+                    1 for r in recent if r.status == WorkflowStatus.SUCCEEDED
+                ),
+                recent_failure_count=sum(
+                    1 for r in recent if r.status == WorkflowStatus.FAILED
+                ),
+            )
         )
-        for d in definitions
-    ]
+    return result
 
 
 @router.get("/{key}", response_model=WorkflowDetail)
 def get_workflow(key: str, db: Session = Depends(get_db)) -> WorkflowDetail:
     d = _get_definition(db, key)
+    spec = WorkflowSpec.model_validate(d.spec)
+
+    nodes = [
+        WorkflowNode(
+            task_key=t.key,
+            handler=t.handler,
+            depends_on=list(t.depends_on),
+            max_attempts=spec.effective_retry_policy(t).max_attempts,
+            timeout_seconds=spec.effective_timeout_seconds(t),
+        )
+        for t in spec.tasks
+    ]
+
+    recent = _recent_runs(db, d.id, 10)
+    recent_summaries = _runs_to_summaries(db, recent, d.name)
+
     return WorkflowDetail(
         key=d.key,
         name=d.name,
@@ -57,6 +124,10 @@ def get_workflow(key: str, db: Session = Depends(get_db)) -> WorkflowDetail:
         version=d.version,
         is_active=d.is_active,
         spec=d.spec,
+        params_schema=spec.params_schema,
+        nodes=nodes,
+        edges=spec_snapshot_to_edges(d.spec),
+        recent_runs=recent_summaries,
     )
 
 
@@ -76,10 +147,12 @@ def trigger_run(
     """
     definition = _get_definition(db, key)
     if not definition.is_active:
-        raise HTTPException(status_code=409, detail=f"workflow '{key}' is not active")
+        raise AppError(
+            "workflow_inactive", f"workflow '{key}' is not active", status_code=409
+        )
 
     run = create_run(db, definition, params=body.params, trigger_type=TriggerType.MANUAL)
-    detail = run_to_detail(db, run)
+    detail = run_to_detail(db, run, definition.name)
 
     # Commit BEFORE publishing: a reconcile message for an uncommitted run
     # would find nothing to do.

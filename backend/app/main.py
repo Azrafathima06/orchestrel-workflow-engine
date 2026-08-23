@@ -5,7 +5,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import runs, workflows
+from app.api.errors import register_error_handlers
+from app.api.routes import health, runs, stats, workers, workflows
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
 
@@ -57,13 +58,13 @@ def create_app() -> FastAPI:
         )
         return response
 
+    register_error_handlers(app)
+
     app.include_router(workflows.router)
     app.include_router(runs.router)
-
-    @app.get("/health")
-    async def health() -> dict[str, str]:
-        """Liveness check. Deliberately touches nothing but the process itself."""
-        return {"status": "ok", "version": settings.app_version}
+    app.include_router(stats.router)
+    app.include_router(workers.router)
+    app.include_router(health.router)
 
     return app
 

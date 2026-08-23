@@ -10,6 +10,44 @@ from pydantic import BaseModel
 
 from app.core.states import TaskStatus, TriggerType, WorkflowStatus
 
+# ------------------------------------------------------------------ shared
+
+
+class TaskCounts(BaseModel):
+    total: int = 0
+    pending: int = 0
+    queued: int = 0
+    running: int = 0
+    retrying: int = 0
+    succeeded: int = 0
+    failed: int = 0
+    upstream_failed: int = 0
+    cancelled: int = 0
+
+
+class RunSummary(BaseModel):
+    id: uuid.UUID
+    definition_key: str
+    workflow_name: str
+    status: WorkflowStatus
+    trigger_type: TriggerType
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    duration_ms: int | None
+    retry_count: int
+    error: str | None
+    task_counts: TaskCounts
+
+
+class TaskRef(BaseModel):
+    task_run_id: uuid.UUID
+    task_key: str
+    status: TaskStatus
+
+
+# --------------------------------------------------------------- workflows
+
 
 class WorkflowSummary(BaseModel):
     key: str
@@ -18,6 +56,22 @@ class WorkflowSummary(BaseModel):
     version: int
     is_active: bool
     task_count: int
+    last_run: RunSummary | None
+    recent_success_count: int
+    recent_failure_count: int
+
+
+class WorkflowNode(BaseModel):
+    task_key: str
+    handler: str
+    depends_on: list[str]
+    max_attempts: int
+    timeout_seconds: int
+
+
+class WorkflowEdge(BaseModel):
+    source: str
+    target: str
 
 
 class WorkflowDetail(BaseModel):
@@ -27,10 +81,22 @@ class WorkflowDetail(BaseModel):
     version: int
     is_active: bool
     spec: dict[str, Any]
+    params_schema: dict[str, Any]
+    nodes: list[WorkflowNode]
+    edges: list[WorkflowEdge]
+    recent_runs: list[RunSummary]
 
 
 class TriggerRunRequest(BaseModel):
     params: dict[str, Any] = {}
+
+
+# --------------------------------------------------------------------- runs
+
+
+class RunListResponse(BaseModel):
+    items: list[RunSummary]
+    next_cursor: str | None
 
 
 class TaskRunSummary(BaseModel):
@@ -56,6 +122,7 @@ class TaskRunSummary(BaseModel):
 class RunDetail(BaseModel):
     id: uuid.UUID
     definition_key: str
+    workflow_name: str
     status: WorkflowStatus
     trigger_type: TriggerType
     params: dict[str, Any]
@@ -64,7 +131,10 @@ class RunDetail(BaseModel):
     finished_at: datetime | None
     duration_ms: int | None
     error: str | None
+    retry_count: int
+    task_counts: TaskCounts
     tasks: list[TaskRunSummary]
+    edges: list[WorkflowEdge]
 
 
 class AttemptDetail(BaseModel):
@@ -84,4 +154,62 @@ class AttemptDetail(BaseModel):
 class TaskRunDetail(TaskRunSummary):
     params: dict[str, Any]
     timeout_seconds: int
+    dependencies: list[TaskRef]
+    dependents: list[TaskRef]
     attempts: list[AttemptDetail]
+
+
+# -------------------------------------------------------------------- stats
+
+
+class RunCounts(BaseModel):
+    total: int
+    succeeded: int
+    failed: int
+    running: int
+    cancelled: int
+
+
+class DailyCount(BaseModel):
+    date: str
+    succeeded: int
+    failed: int
+
+
+class StatsOverview(BaseModel):
+    runs: RunCounts
+    success_rate: float | None
+    avg_duration_ms: float | None
+    p95_duration_ms: float | None
+    retries: int
+    tasks_executed: int
+    recovered_tasks: int
+    daily: list[DailyCount]
+
+
+# ------------------------------------------------------------------ workers
+
+
+class WorkerObservation(BaseModel):
+    worker_id: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    attempts_total: int
+    attempts_1h: int
+    currently_running: int
+    liveness: str  # "active" | "idle" | "stale"
+
+
+# ----------------------------------------------------------------- health
+
+
+class ComponentHealth(BaseModel):
+    ok: bool
+    latency_ms: float | None = None
+    error: str | None = None
+
+
+class ReadyResponse(BaseModel):
+    database: ComponentHealth
+    broker: ComponentHealth
+    workers_observed_5m: int

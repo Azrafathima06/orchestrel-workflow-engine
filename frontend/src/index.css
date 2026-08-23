@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------
+   Design tokens. Dark-mode-first infrastructure tool: restrained neutrals,
+   one accent, semantic status colors. Every status color pairs with an
+   icon and a text label elsewhere in the app — never color alone.
+   ------------------------------------------------------------------- */
+@theme {
+  --font-sans:
+    "Inter var", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:
+    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Surfaces */
+  --color-surface-0: oklch(15% 0.006 260); /* page background */
+  --color-surface-1: oklch(19% 0.007 260); /* panels */
+  --color-surface-2: oklch(23% 0.008 260); /* raised / hover */
+  --color-border: oklch(30% 0.008 260);
+  --color-border-subtle: oklch(24% 0.007 260);
+
+  /* Text */
+  --color-text-primary: oklch(94% 0.003 260);
+  --color-text-secondary: oklch(72% 0.006 260);
+  --color-text-tertiary: oklch(52% 0.007 260);
+
+  /* Accent */
+  --color-accent: oklch(65% 0.16 255);
+  --color-accent-hover: oklch(70% 0.16 255);
+  --color-accent-subtle: oklch(28% 0.05 255);
+
+  /* Status semantics */
+  --color-status-pending: oklch(55% 0.006 260);
+  --color-status-queued: oklch(62% 0.09 250);
+  --color-status-running: oklch(65% 0.15 250);
+  --color-status-retrying: oklch(72% 0.15 75);
+  --color-status-succeeded: oklch(70% 0.15 155);
+  --color-status-failed: oklch(65% 0.19 25);
+  --color-status-upstream-failed: oklch(68% 0.12 70);
+  --color-status-cancelled: oklch(48% 0.006 260);
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--color-surface-0);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+/* Tabular numerals wherever digits update live (durations, counts,
+   timestamps) so they don't jitter horizontally on poll refresh. */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-accent-subtle);
+}
+
+/* Minimal scrollbar so wide tables / DAGs don't look like a raw browser default. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 999px;
+  border: 2px solid var(--color-surface-0);
+}

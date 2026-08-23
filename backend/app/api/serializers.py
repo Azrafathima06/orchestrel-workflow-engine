@@ -2,20 +2,46 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.schemas import AttemptDetail, RunDetail, TaskRunDetail, TaskRunSummary
+from app.api.aggregates import retry_counts_for_runs, task_counts_for_runs
+from app.api.schemas import (
+    AttemptDetail,
+    RunDetail,
+    RunSummary,
+    TaskCounts,
+    TaskRef,
+    TaskRunDetail,
+    TaskRunSummary,
+    WorkflowEdge,
+)
 from app.core.states import AttemptStatus
 from app.db.models import TaskAttempt, TaskRun, WorkflowRun
+
+
+def spec_snapshot_to_edges(spec: dict[str, Any]) -> list[WorkflowEdge]:
+    """Dependency edges straight from a frozen spec document.
+
+    Used for both live workflow definitions and a run's frozen
+    spec_snapshot, so a run's DAG always renders exactly as it looked when
+    triggered even if the definition has since changed.
+    """
+    edges: list[WorkflowEdge] = []
+    for task in spec.get("tasks", []):
+        for dep in task.get("depends_on", []):
+            edges.append(WorkflowEdge(source=dep, target=task["key"]))
+    return edges
 
 
 def _latest_worker_id(session: Session, task_run_id) -> str | None:
     """Worker that ran this task's most recent attempt, if any.
 
     Read from task_attempt rather than stored on task_run: the attempt row
-    is the actual execution evidence, and with retries (M5) a task can have
-    been executed by several different workers.
+    is the actual execution evidence, and with retries a task can have been
+    executed by several different workers.
     """
     return session.execute(
         select(TaskAttempt.worker_id)
@@ -46,15 +72,41 @@ def task_to_summary(session: Session, task: TaskRun) -> TaskRunSummary:
     )
 
 
-def run_to_detail(session: Session, run: WorkflowRun) -> RunDetail:
+def run_to_summary(
+    run: WorkflowRun,
+    workflow_name: str,
+    task_counts: TaskCounts,
+    retry_count: int,
+) -> RunSummary:
+    return RunSummary(
+        id=run.id,
+        definition_key=run.definition_key,
+        workflow_name=workflow_name,
+        status=run.status,
+        trigger_type=run.trigger_type,
+        created_at=run.created_at,
+        started_at=run.started_at,
+        finished_at=run.finished_at,
+        duration_ms=run.duration_ms,
+        retry_count=retry_count,
+        error=run.error,
+        task_counts=task_counts,
+    )
+
+
+def run_to_detail(session: Session, run: WorkflowRun, workflow_name: str) -> RunDetail:
     tasks = (
         session.execute(select(TaskRun).where(TaskRun.run_id == run.id).order_by(TaskRun.task_key))
         .scalars()
         .all()
     )
+    counts = task_counts_for_runs(session, [run.id])[run.id]
+    retries = retry_counts_for_runs(session, [run.id])[run.id]
+
     return RunDetail(
         id=run.id,
         definition_key=run.definition_key,
+        workflow_name=workflow_name,
         status=run.status,
         trigger_type=run.trigger_type,
         params=run.params,
@@ -63,7 +115,10 @@ def run_to_detail(session: Session, run: WorkflowRun) -> RunDetail:
         finished_at=run.finished_at,
         duration_ms=run.duration_ms,
         error=run.error,
+        retry_count=retries,
+        task_counts=counts,
         tasks=[task_to_summary(session, t) for t in tasks],
+        edges=spec_snapshot_to_edges(run.spec_snapshot),
     )
 
 
@@ -77,11 +132,30 @@ def task_to_detail(session: Session, task: TaskRun) -> TaskRunDetail:
         .scalars()
         .all()
     )
+
+    all_tasks = (
+        session.execute(select(TaskRun).where(TaskRun.run_id == task.run_id)).scalars().all()
+    )
+    by_key = {t.task_key: t for t in all_tasks}
+
+    dependencies = [
+        TaskRef(task_run_id=by_key[dep].id, task_key=dep, status=by_key[dep].status)
+        for dep in task.depends_on
+        if dep in by_key
+    ]
+    dependents = [
+        TaskRef(task_run_id=t.id, task_key=t.task_key, status=t.status)
+        for t in all_tasks
+        if task.task_key in t.depends_on
+    ]
+
     summary = task_to_summary(session, task)
     return TaskRunDetail(
         **summary.model_dump(),
         params=task.params,
         timeout_seconds=task.timeout_seconds,
+        dependencies=dependencies,
+        dependents=dependents,
         attempts=[
             AttemptDetail(
                 attempt_number=a.attempt_number,
