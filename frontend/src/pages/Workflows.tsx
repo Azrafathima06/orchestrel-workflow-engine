@@ -1,87 +1,80 @@
-import { ArrowRight, Play, Workflow as WorkflowIcon } from "lucide-react";
+import { Play, Workflow as WorkflowIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWorkflows } from "@/api/queries";
 import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { Skeleton } from "@/components/ui/Skeleton";
+import { TableSkeleton } from "@/components/ui/Skeleton";
 import { formatRelativeTime } from "@/lib/format";
 
 export function Workflows() {
   const { data, isLoading, isError, refetch } = useWorkflows();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-6">
-      <div>
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">Workflows</h1>
-        <p className="text-sm text-[var(--color-text-tertiary)]">
-          Declarative DAG definitions available to trigger.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-4 p-6">
+      <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
+        Workflows
+      </h1>
 
-      {isLoading && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <Skeleton key={`wf-${i}`} className="h-32" />
-          ))}
-        </div>
-      )}
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+        {isLoading && <TableSkeleton rows={5} columns={4} />}
+        {isError && <ErrorState onRetry={() => refetch()} />}
 
-      {isError && <ErrorState onRetry={() => refetch()} />}
+        {data && data.length === 0 && (
+          <EmptyState
+            icon={WorkflowIcon}
+            title="No workflow definitions found"
+            description="Workflows are seeded from JSON definitions at startup."
+          />
+        )}
 
-      {data && data.length === 0 && (
-        <EmptyState
-          icon={WorkflowIcon}
-          title="No workflow definitions found"
-          description="Workflows are seeded from JSON definitions at startup."
-        />
-      )}
-
-      {data && data.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-          {data.map((wf) => (
-            <Link
-              key={wf.key}
-              to={`/workflows/${wf.key}`}
-              className="group flex flex-col gap-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4 transition-colors hover:border-[var(--color-border)] hover:bg-[var(--color-surface-2)]"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="truncate text-sm font-semibold text-[var(--color-text-primary)]">
-                    {wf.name}
-                  </h3>
-                  <p className="font-mono text-xs text-[var(--color-text-tertiary)]">{wf.key}</p>
-                </div>
-                <ArrowRight className="h-4 w-4 shrink-0 text-[var(--color-text-tertiary)] transition-transform group-hover:translate-x-0.5" />
-              </div>
-
-              {wf.description && (
-                <p className="line-clamp-2 text-xs text-[var(--color-text-secondary)]">
-                  {wf.description}
-                </p>
-              )}
-
-              <div className="mt-auto flex items-center justify-between border-t border-[var(--color-border-subtle)] pt-3">
-                <span className="text-xs text-[var(--color-text-tertiary)]">
-                  {wf.task_count} task{wf.task_count === 1 ? "" : "s"}
-                </span>
-                {wf.last_run ? (
-                  <div className="flex items-center gap-2">
-                    <StatusPill status={wf.last_run.status} size="sm" />
-                    <span className="text-xs text-[var(--color-text-tertiary)]">
-                      {formatRelativeTime(wf.last_run.created_at)}
+        {data && data.length > 0 && (
+          <div className="divide-y divide-[var(--color-border-subtle)]">
+            {data.map((wf) => (
+              <Link
+                key={wf.key}
+                to={`/workflows/${wf.key}`}
+                className="flex items-center gap-4 px-4 py-3 transition-colors hover:bg-[var(--color-surface-2)]"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <span className="truncate text-[13px] font-medium text-[var(--color-text-primary)]">
+                      {wf.name}
+                    </span>
+                    <span className="shrink-0 font-mono text-[11px] text-[var(--color-text-tertiary)]">
+                      {wf.key}
                     </span>
                   </div>
-                ) : (
-                  <span className="flex items-center gap-1 text-xs text-[var(--color-text-tertiary)]">
-                    <Play className="h-3 w-3" /> Never run
-                  </span>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
-      )}
+                  {wf.description && (
+                    <p className="mt-0.5 truncate text-xs text-[var(--color-text-tertiary)]">
+                      {wf.description}
+                    </p>
+                  )}
+                </div>
+
+                <span className="hidden shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-tertiary)] sm:block">
+                  {wf.task_count} task{wf.task_count === 1 ? "" : "s"}
+                </span>
+
+                <div className="w-40 shrink-0 text-right">
+                  {wf.last_run ? (
+                    <div className="flex items-center justify-end gap-2">
+                      <span className="text-xs text-[var(--color-text-tertiary)]">
+                        {formatRelativeTime(wf.last_run.created_at)}
+                      </span>
+                      <StatusPill status={wf.last_run.status} size="sm" bare />
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs text-[var(--color-text-tertiary)]">
+                      <Play className="h-3 w-3" /> Never run
+                    </span>
+                  )}
+                </div>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -18,17 +18,17 @@ export function Workers() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-6">
       <div>
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">
+        <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
           Workers observed executing tasks
         </h1>
-        <p className="max-w-2xl text-sm text-[var(--color-text-tertiary)]">
+        <p className="mt-1 max-w-2xl text-[13px] text-[var(--color-text-tertiary)]">
           Derived from persisted task-attempt history — not a Celery remote-control heartbeat.
           A worker that is running but idle looks identical to one that isn't running at all,
           which is why liveness below reflects observed activity rather than an "online" claim.
         </p>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
         {isLoading && <TableSkeleton rows={4} columns={6} />}
         {isError && <ErrorState onRetry={() => refetch()} />}
 
@@ -44,14 +44,14 @@ export function Workers() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border-subtle)] text-left text-xs text-[var(--color-text-tertiary)]">
-                  <th className="px-4 py-2 font-medium">Worker ID</th>
-                  <th className="px-4 py-2 font-medium">Liveness</th>
-                  <th className="px-4 py-2 font-medium">Currently running</th>
-                  <th className="px-4 py-2 font-medium">Attempts (1h)</th>
-                  <th className="px-4 py-2 font-medium">Attempts (total)</th>
-                  <th className="px-4 py-2 font-medium">Last seen</th>
-                  <th className="px-4 py-2 font-medium">First seen</th>
+                <tr className="border-b border-[var(--color-border-subtle)] text-left">
+                  <th className="label-eyebrow px-4 py-2 font-medium">Worker ID</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Liveness</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Currently running</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Attempts (1h)</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Attempts (total)</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Last seen</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">First seen</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border-subtle)]">
@@ -63,7 +63,7 @@ export function Workers() {
                     <td className="px-4 py-2.5">
                       <span
                         className={cn(
-                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium capitalize",
+                          "inline-flex items-center rounded-[var(--radius-sm)] border px-1.5 py-0.5 text-[11px] font-medium capitalize",
                           LIVENESS_STYLE[w.liveness],
                         )}
                       >

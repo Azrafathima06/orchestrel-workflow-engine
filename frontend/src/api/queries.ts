@@ -28,6 +28,16 @@ export function useReady() {
   });
 }
 
+/** The real running app_version, for the sidebar footer — never invented. */
+export function useHealth() {
+  return useQuery({
+    queryKey: ["health"],
+    queryFn: () => apiRequest<{ status: string; version: string }>("/health"),
+    staleTime: Number.POSITIVE_INFINITY, // the version cannot change mid-session
+    retry: 1,
+  });
+}
+
 export function useWorkflows() {
   return useQuery({
     queryKey: ["workflows"],

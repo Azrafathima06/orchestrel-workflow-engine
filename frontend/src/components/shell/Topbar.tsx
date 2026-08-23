@@ -23,35 +23,51 @@ function useBreadcrumbs(): { label: string; to: string }[] {
   return crumbs;
 }
 
-function ReadinessDot() {
+/**
+ * Three real, independently-checked components — not one aggregate badge.
+ * "API" is implicit: this request only rendered because the API answered.
+ */
+function SystemStatusCluster() {
   const { data, isError } = useReady();
 
-  const dbOk = data?.database.ok ?? false;
-  const brokerOk = data?.broker.ok ?? false;
-  const allOk = dbOk && brokerOk;
-
-  const label = isError
-    ? "Backend unreachable"
-    : !data
-      ? "Checking backend…"
-      : allOk
-        ? "All systems operational"
-        : `${!dbOk ? "Database unreachable. " : ""}${!brokerOk ? "Broker unreachable." : ""}`;
+  const items: { label: string; ok: boolean; detail: string }[] = [
+    { label: "API", ok: !isError, detail: isError ? "unreachable" : "reachable" },
+    {
+      label: "DB",
+      ok: data?.database.ok ?? false,
+      detail: data
+        ? data.database.ok
+          ? `${data.database.latency_ms?.toFixed(0)}ms`
+          : (data.database.error ?? "unreachable")
+        : "checking…",
+    },
+    {
+      label: "Broker",
+      ok: data?.broker.ok ?? false,
+      detail: data
+        ? data.broker.ok
+          ? `${data.broker.latency_ms?.toFixed(0)}ms`
+          : (data.broker.error ?? "unreachable")
+        : "checking…",
+    },
+  ];
 
   return (
-    <Tooltip content={label}>
-      <span className="flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2.5 py-1 text-xs">
-        <span
-          className={cn(
-            "h-1.5 w-1.5 rounded-full",
-            allOk ? "bg-[var(--color-status-succeeded)]" : "bg-[var(--color-status-failed)]",
-          )}
-        />
-        <span className="text-[var(--color-text-secondary)]">
-          {allOk ? "Operational" : "Degraded"}
-        </span>
-      </span>
-    </Tooltip>
+    <div className="flex items-center gap-3 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-2.5 py-1">
+      {items.map((item) => (
+        <Tooltip key={item.label} content={`${item.label}: ${item.detail}`}>
+          <span className="flex items-center gap-1.5 text-[11px] text-[var(--color-text-tertiary)]">
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                item.ok ? "bg-[var(--color-status-succeeded)]" : "bg-[var(--color-status-failed)]",
+              )}
+            />
+            {item.label}
+          </span>
+        </Tooltip>
+      ))}
+    </div>
   );
 }
 
@@ -65,7 +81,7 @@ function MobileNav() {
         type="button"
         onClick={() => setOpen(true)}
         aria-label="Open navigation"
-        className="rounded-md p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] lg:hidden"
+        className="rounded-[var(--radius-md)] p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] lg:hidden"
       >
         <Menu className="h-4.5 w-4.5" />
       </button>
@@ -79,7 +95,7 @@ function MobileNav() {
               onClick={() => setOpen(false)}
               className={({ isActive }) =>
                 cn(
-                  "flex items-center gap-2.5 rounded-md px-2.5 py-2 text-sm font-medium transition-colors",
+                  "flex items-center gap-2.5 rounded-[var(--radius-md)] px-2.5 py-2 text-sm font-medium transition-colors",
                   isActive
                     ? "bg-[var(--color-surface-2)] text-[var(--color-text-primary)]"
                     : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-2)] hover:text-[var(--color-text-primary)]",
@@ -103,7 +119,7 @@ export function Topbar() {
     <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-[var(--color-border-subtle)] bg-[var(--color-surface-0)] px-4">
       <div className="flex min-w-0 items-center gap-2">
         <MobileNav />
-        <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden text-sm text-[var(--color-text-tertiary)]">
+        <nav className="flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] text-[var(--color-text-tertiary)]">
           {crumbs.map((crumb, i) => (
             <Fragment key={crumb.to}>
               {i > 0 && <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
@@ -122,7 +138,7 @@ export function Topbar() {
           ))}
         </nav>
       </div>
-      <ReadinessDot />
+      <SystemStatusCluster />
     </header>
   );
 }

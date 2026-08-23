@@ -30,19 +30,6 @@ function ParamsForm({
     Object.fromEntries(fields.map(([key, spec]) => [key, String(spec.default ?? "")])),
   );
 
-  if (fields.length === 0) {
-    return (
-      <Button
-        variant="primary"
-        onClick={() => onSubmit({})}
-        disabled={submitting}
-      >
-        {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-        Run workflow
-      </Button>
-    );
-  }
-
   return (
     <form
       onSubmit={(e) => {
@@ -59,7 +46,10 @@ function ParamsForm({
     >
       {fields.map(([key, spec]) => (
         <div key={key}>
-          <label htmlFor={`param-${key}`} className="mb-1 block text-xs font-medium text-[var(--color-text-secondary)]">
+          <label
+            htmlFor={`param-${key}`}
+            className="mb-1 flex items-baseline justify-between font-mono text-[11px] text-[var(--color-text-secondary)]"
+          >
             {key}
           </label>
           <input
@@ -67,10 +57,12 @@ function ParamsForm({
             type={spec.type === "integer" || spec.type === "number" ? "number" : "text"}
             value={values[key]}
             onChange={(e) => setValues((v) => ({ ...v, [key]: e.target.value }))}
-            className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface-0)] px-2.5 py-1.5 text-sm text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+            className="w-full rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-0)] px-2.5 py-1.5 font-mono text-[13px] text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
           />
           {spec.description && (
-            <p className="mt-1 text-xs text-[var(--color-text-tertiary)]">{spec.description}</p>
+            <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-tertiary)]">
+              {spec.description}
+            </p>
           )}
         </div>
       ))}
@@ -126,12 +118,16 @@ export function WorkflowDetail() {
   return (
     <div className="mx-auto max-w-6xl space-y-5 p-6">
       <div>
-        <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">{data.name}</h1>
-        <p className="font-mono text-xs text-[var(--color-text-tertiary)]">
-          {data.key} · v{data.version} · {data.nodes.length} tasks
-        </p>
+        <div className="flex items-baseline gap-2">
+          <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
+            {data.name}
+          </h1>
+          <span className="font-mono text-xs text-[var(--color-text-tertiary)]">
+            {data.key} · v{data.version} · {data.nodes.length} tasks
+          </span>
+        </div>
         {data.description && (
-          <p className="mt-1.5 max-w-2xl text-sm text-[var(--color-text-secondary)]">
+          <p className="mt-1.5 max-w-2xl text-[13px] text-[var(--color-text-secondary)]">
             {data.description}
           </p>
         )}
@@ -139,20 +135,20 @@ export function WorkflowDetail() {
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          <div className="h-80 overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+          <div className="h-80 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
             <DagView tasks={previewTasks} edges={data.edges} />
           </div>
 
-          <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+          <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-[var(--color-border-subtle)] text-left text-xs text-[var(--color-text-tertiary)]">
-                    <th className="px-4 py-2 font-medium">Task</th>
-                    <th className="px-4 py-2 font-medium">Handler</th>
-                    <th className="px-4 py-2 font-medium">Depends on</th>
-                    <th className="px-4 py-2 font-medium">Max attempts</th>
-                    <th className="px-4 py-2 font-medium">Timeout</th>
+                  <tr className="border-b border-[var(--color-border-subtle)] text-left">
+                    <th className="label-eyebrow px-4 py-2 font-medium">Task</th>
+                    <th className="label-eyebrow px-4 py-2 font-medium">Handler</th>
+                    <th className="label-eyebrow px-4 py-2 font-medium">Depends on</th>
+                    <th className="label-eyebrow px-4 py-2 text-right font-medium">Attempts</th>
+                    <th className="label-eyebrow px-4 py-2 text-right font-medium">Timeout</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[var(--color-border-subtle)]">
@@ -167,10 +163,10 @@ export function WorkflowDetail() {
                       <td className="px-4 py-2 text-xs text-[var(--color-text-tertiary)]">
                         {n.depends_on.length > 0 ? n.depends_on.join(", ") : "—"}
                       </td>
-                      <td className="px-4 py-2 text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                      <td className="px-4 py-2 text-right text-xs tabular-nums text-[var(--color-text-tertiary)]">
                         {n.max_attempts}
                       </td>
-                      <td className="px-4 py-2 text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                      <td className="px-4 py-2 text-right text-xs tabular-nums text-[var(--color-text-tertiary)]">
                         {n.timeout_seconds}s
                       </td>
                     </tr>
@@ -182,10 +178,8 @@ export function WorkflowDetail() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4">
-            <h2 className="mb-3 text-sm font-medium text-[var(--color-text-primary)]">
-              Trigger a run
-            </h2>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4">
+            <h2 className="label-eyebrow mb-3">Trigger a run</h2>
             <ParamsForm
               paramsSchema={data.params_schema}
               submitting={trigger.isPending}
@@ -205,9 +199,9 @@ export function WorkflowDetail() {
             )}
           </div>
 
-          <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]">
-            <div className="border-b border-[var(--color-border-subtle)] px-4 py-3">
-              <h2 className="text-sm font-medium text-[var(--color-text-primary)]">Recent runs</h2>
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+            <div className="border-b border-[var(--color-border-subtle)] px-4 py-2.5">
+              <h2 className="label-eyebrow">Recent runs</h2>
             </div>
             {data.recent_runs.length === 0 ? (
               <p className="px-4 py-6 text-center text-xs text-[var(--color-text-tertiary)]">
@@ -222,7 +216,7 @@ export function WorkflowDetail() {
                     className="flex items-center justify-between px-4 py-2.5 hover:bg-[var(--color-surface-2)]"
                   >
                     <div className="flex items-center gap-2">
-                      <StatusPill status={run.status} size="sm" />
+                      <StatusPill status={run.status} size="sm" bare />
                       <span className="font-mono text-xs text-[var(--color-text-tertiary)]">
                         {formatShortId(run.id)}
                       </span>

@@ -1,9 +1,10 @@
 import dagre from "dagre";
 import type { Edge } from "@xyflow/react";
 import type { WorkflowEdge } from "@/api/types";
+import { statusMeta } from "@/lib/status";
 
-const NODE_WIDTH = 200;
-const NODE_HEIGHT = 68;
+const NODE_WIDTH = 168;
+const NODE_HEIGHT = 52;
 
 export interface DagPosition {
   x: number;
@@ -16,14 +17,22 @@ export interface DagPosition {
  * each node, so this stays a pure geometry function independent of the
  * task shape (used both for a live run's TaskRunSummary[] and a workflow
  * preview's WorkflowNode[]).
+ *
+ * Edge treatment is derived from the *target's* real status: an edge whose
+ * target already succeeded reads as "completed", one whose target is
+ * currently running/retrying reads as "active" (dashed, animated — the
+ * only animation on the canvas), one whose target failed reads as
+ * "failed", everything else (target not yet started) reads as "normal".
+ * A preview with no statuses (all tasks default to pending) renders every
+ * edge as normal, which is honest for a workflow that has never run.
  */
 export function layoutDag(
   taskKeys: string[],
   edges: WorkflowEdge[],
-  activeTargets: Set<string> = new Set(),
+  statusByKey: Record<string, string> = {},
 ): { positions: Record<string, DagPosition>; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 28, ranksep: 64 });
+  g.setGraph({ rankdir: "LR", nodesep: 20, ranksep: 56 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const key of taskKeys) {
@@ -46,13 +55,34 @@ export function layoutDag(
   const keySet = new Set(taskKeys);
   const rfEdges: Edge[] = edges
     .filter((edge) => keySet.has(edge.source) && keySet.has(edge.target))
-    .map((edge) => ({
-      id: `${edge.source}->${edge.target}`,
-      source: edge.source,
-      target: edge.target,
-      animated: activeTargets.has(edge.target),
-      style: { stroke: "var(--color-border)", strokeWidth: 1.5 },
-    }));
+    .map((edge) => {
+      const targetStatus = statusByKey[edge.target] ?? "pending";
+      const targetMeta = statusMeta(targetStatus);
+      const isActive = targetStatus === "running" || targetStatus === "retrying";
+      const isFailed = targetStatus === "failed" || targetStatus === "upstream_failed";
+      const isCompleted = targetStatus === "succeeded";
+
+      let stroke = "var(--color-border)";
+      let strokeWidth = 1.25;
+      if (isFailed) {
+        stroke = "var(--color-status-failed)";
+        strokeWidth = 1.5;
+      } else if (isActive) {
+        stroke = `var(${targetMeta.cssVar})`;
+        strokeWidth = 1.5;
+      } else if (isCompleted) {
+        stroke = "var(--color-text-tertiary)";
+        strokeWidth = 1.25;
+      }
+
+      return {
+        id: `${edge.source}->${edge.target}`,
+        source: edge.source,
+        target: edge.target,
+        animated: isActive,
+        style: { stroke, strokeWidth, strokeDasharray: isActive ? "3 3" : undefined },
+      };
+    });
 
   return { positions, edges: rfEdges };
 }

@@ -1,42 +1,56 @@
 @import "tailwindcss";
 
 /* ---------------------------------------------------------------------
-   Design tokens. Dark-mode-first infrastructure tool: restrained neutrals,
-   one accent, semantic status colors. Every status color pairs with an
-   icon and a text label elsewhere in the app — never color alone.
+   Design tokens — Orchestrel.
+
+   A technical control surface, not a generated SaaS dashboard: dense,
+   quiet, typographically driven. Hierarchy comes from size/weight/spacing,
+   not from a rainbow of accent colors. The one accent is reserved for
+   interactive affordances; status meaning is carried by its own small
+   palette, always paired with an icon and a label.
+
+   Typography deliberately leads with the platform's own system font
+   (San Francisco / Segoe UI / Roboto depending on OS) rather than a
+   packaged web font — that IS "editor UI, modern operating system"
+   typography, not a fallback for one.
    ------------------------------------------------------------------- */
 @theme {
   --font-sans:
-    "Inter var", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   --font-mono:
-    "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, monospace;
 
-  /* Surfaces */
-  --color-surface-0: oklch(15% 0.006 260); /* page background */
-  --color-surface-1: oklch(19% 0.007 260); /* panels */
-  --color-surface-2: oklch(23% 0.008 260); /* raised / hover */
-  --color-border: oklch(30% 0.008 260);
-  --color-border-subtle: oklch(24% 0.007 260);
+  /* Surfaces — neutral charcoal, one step apart in lightness */
+  --color-surface-0: oklch(14.5% 0.005 260); /* page background */
+  --color-surface-1: oklch(18% 0.006 260); /* panels */
+  --color-surface-2: oklch(22.5% 0.007 260); /* raised / hover */
+  --color-surface-3: oklch(27% 0.008 260); /* active / pressed */
+  --color-border: oklch(29% 0.008 260);
+  --color-border-subtle: oklch(22% 0.006 260);
 
   /* Text */
-  --color-text-primary: oklch(94% 0.003 260);
-  --color-text-secondary: oklch(72% 0.006 260);
-  --color-text-tertiary: oklch(52% 0.007 260);
+  --color-text-primary: oklch(93% 0.003 260);
+  --color-text-secondary: oklch(70% 0.006 260);
+  --color-text-tertiary: oklch(50% 0.007 260);
 
-  /* Accent */
-  --color-accent: oklch(65% 0.16 255);
-  --color-accent-hover: oklch(70% 0.16 255);
-  --color-accent-subtle: oklch(28% 0.05 255);
+  /* Accent — restrained indigo, not SaaS-gradient blue */
+  --color-accent: oklch(62% 0.13 258);
+  --color-accent-hover: oklch(67% 0.13 258);
+  --color-accent-subtle: oklch(26% 0.045 258);
 
-  /* Status semantics */
-  --color-status-pending: oklch(55% 0.006 260);
-  --color-status-queued: oklch(62% 0.09 250);
-  --color-status-running: oklch(65% 0.15 250);
-  --color-status-retrying: oklch(72% 0.15 75);
-  --color-status-succeeded: oklch(70% 0.15 155);
-  --color-status-failed: oklch(65% 0.19 25);
-  --color-status-upstream-failed: oklch(68% 0.12 70);
-  --color-status-cancelled: oklch(48% 0.006 260);
+  /* Status semantics — quiet confidence, not neon */
+  --color-status-pending: oklch(52% 0.006 260);
+  --color-status-queued: oklch(60% 0.07 250);
+  --color-status-running: oklch(62% 0.12 250);
+  --color-status-retrying: oklch(70% 0.13 75);
+  --color-status-succeeded: oklch(65% 0.11 155);
+  --color-status-failed: oklch(62% 0.16 25);
+  --color-status-upstream-failed: oklch(66% 0.1 70);
+  --color-status-cancelled: oklch(46% 0.006 260);
+
+  --radius-sm: 5px;
+  --radius-md: 7px;
+  --radius-lg: 9px;
 }
 
 html {
@@ -48,12 +62,23 @@ body {
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-feature-settings: "tnum" 1, "cv11" 1;
+  -webkit-font-smoothing: antialiased;
 }
 
 /* Tabular numerals wherever digits update live (durations, counts,
    timestamps) so they don't jitter horizontally on poll refresh. */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+/* Small uppercase section/metadata labels — used sparingly, never as the
+   primary way to establish hierarchy. */
+.label-eyebrow {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
 }
 
 ::selection {

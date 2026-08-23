@@ -16,13 +16,11 @@ interface DagViewProps {
 
 export function DagView({ tasks, edges, selectedTaskKey, onSelectTask }: DagViewProps) {
   const { nodes, flowEdges } = useMemo(() => {
-    const activeTargets = new Set(
-      tasks.filter((t) => t.status === "running" || t.status === "retrying").map((t) => t.task_key),
-    );
+    const statusByKey = Object.fromEntries(tasks.map((t) => [t.task_key, t.status]));
     const { positions, edges: rfEdges } = layoutDag(
       tasks.map((t) => t.task_key),
       edges,
-      activeTargets,
+      statusByKey,
     );
 
     const rfNodes: Node<DagNodeData>[] = tasks.map((task) => ({
@@ -44,7 +42,7 @@ export function DagView({ tasks, edges, selectedTaskKey, onSelectTask }: DagView
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectTask?.(node.id)}
         fitView
-        fitViewOptions={{ padding: 0.2 }}
+        fitViewOptions={{ padding: 0.25 }}
         minZoom={0.3}
         maxZoom={1.5}
         proOptions={{ hideAttribution: true }}
@@ -52,8 +50,16 @@ export function DagView({ tasks, edges, selectedTaskKey, onSelectTask }: DagView
         elementsSelectable
         panOnScroll
       >
-        <Background variant={BackgroundVariant.Dots} gap={20} size={1} color="var(--color-border-subtle)" />
-        <Controls showInteractive={false} className="!shadow-none [&>button]:!border-[var(--color-border)] [&>button]:!bg-[var(--color-surface-1)] [&>button]:!fill-[var(--color-text-secondary)]" />
+        <Background
+          variant={BackgroundVariant.Cross}
+          gap={24}
+          size={6}
+          color="var(--color-border-subtle)"
+        />
+        <Controls
+          showInteractive={false}
+          className="!shadow-none [&>button]:!border-[var(--color-border)] [&>button]:!bg-[var(--color-surface-1)] [&>button]:!fill-[var(--color-text-secondary)]"
+        />
       </ReactFlow>
     </div>
   );

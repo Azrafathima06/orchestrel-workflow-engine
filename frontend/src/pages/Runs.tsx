@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { useRuns, useWorkflows } from "@/api/queries";
 import type { WorkflowStatus } from "@/api/types";
 import { StatusPill } from "@/components/StatusPill";
+import { TaskCountsStrip } from "@/components/TaskCountsStrip";
 import { Button } from "@/components/ui/Button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -32,7 +33,7 @@ function Select({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-8 rounded-md border border-[var(--color-border)] bg-[var(--color-surface-1)] px-2 text-xs text-[var(--color-text-primary)] focus:border-[var(--color-accent)] focus:outline-none"
+      className="h-7 rounded-[var(--radius-md)] border border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] px-2 text-xs text-[var(--color-text-secondary)] focus:border-[var(--color-accent)] focus:outline-none"
     >
       {children}
     </select>
@@ -56,10 +57,9 @@ export function Runs() {
   return (
     <div className="mx-auto max-w-6xl space-y-4 p-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">Runs</h1>
-          <p className="text-sm text-[var(--color-text-tertiary)]">Workflow execution history.</p>
-        </div>
+        <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
+          Runs
+        </h1>
         <div className="flex items-center gap-2">
           <Select value={status} onChange={(v) => setStatus(v as WorkflowStatus | "")}>
             {STATUS_OPTIONS.map((o) => (
@@ -79,7 +79,7 @@ export function Runs() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
         {runs.isLoading && <TableSkeleton rows={8} columns={7} />}
         {runs.isError && <ErrorState onRetry={() => runs.refetch()} />}
 
@@ -95,22 +95,22 @@ export function Runs() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[var(--color-border-subtle)] text-left text-xs text-[var(--color-text-tertiary)]">
-                  <th className="px-4 py-2 font-medium">Status</th>
-                  <th className="px-4 py-2 font-medium">Workflow</th>
-                  <th className="px-4 py-2 font-medium">Run</th>
-                  <th className="px-4 py-2 font-medium">Trigger</th>
-                  <th className="px-4 py-2 font-medium">Created</th>
-                  <th className="px-4 py-2 font-medium">Duration</th>
-                  <th className="px-4 py-2 font-medium">Progress</th>
-                  <th className="px-4 py-2 font-medium">Retries</th>
+                <tr className="border-b border-[var(--color-border-subtle)] text-left">
+                  <th className="label-eyebrow px-4 py-2 font-medium">Status</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Workflow</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Run</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Trigger</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Created</th>
+                  <th className="label-eyebrow px-4 py-2 text-right font-medium">Duration</th>
+                  <th className="label-eyebrow px-4 py-2 font-medium">Progress</th>
+                  <th className="label-eyebrow px-4 py-2 text-right font-medium">Retries</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border-subtle)]">
                 {items.map((run) => (
                   <tr
                     key={run.id}
-                    className="cursor-pointer hover:bg-[var(--color-surface-2)]"
+                    className="cursor-pointer transition-colors hover:bg-[var(--color-surface-2)]"
                     onClick={() => navigate(`/runs/${run.id}`)}
                   >
                     <td className="px-4 py-2.5">
@@ -119,7 +119,7 @@ export function Runs() {
                     <td className="px-4 py-2.5">
                       <Link
                         to={`/runs/${run.id}`}
-                        className="text-[var(--color-text-primary)] hover:underline"
+                        className="text-[13px] text-[var(--color-text-primary)] hover:underline"
                         onClick={(e) => e.stopPropagation()}
                       >
                         {run.workflow_name}
@@ -134,13 +134,18 @@ export function Runs() {
                     <td className="px-4 py-2.5 text-xs text-[var(--color-text-tertiary)]">
                       {formatRelativeTime(run.created_at)}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                    <td className="px-4 py-2.5 text-right font-mono text-xs tabular-nums text-[var(--color-text-tertiary)]">
                       {formatDuration(run.duration_ms)}
                     </td>
-                    <td className="px-4 py-2.5 font-mono text-xs tabular-nums text-[var(--color-text-tertiary)]">
-                      {run.task_counts.succeeded}/{run.task_counts.total}
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="w-9 shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                          {run.task_counts.succeeded}/{run.task_counts.total}
+                        </span>
+                        <TaskCountsStrip counts={run.task_counts} className="w-16 shrink-0" />
+                      </div>
                     </td>
-                    <td className="px-4 py-2.5 text-xs tabular-nums text-[var(--color-text-tertiary)]">
+                    <td className="px-4 py-2.5 text-right text-xs tabular-nums text-[var(--color-text-tertiary)]">
                       {run.retry_count > 0 ? run.retry_count : "—"}
                     </td>
                   </tr>

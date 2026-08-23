@@ -2,6 +2,7 @@ import {
   AlertTriangle,
   Ban,
   CheckCircle2,
+  CircleDashed,
   CircleDot,
   Clock,
   type LucideIcon,
@@ -32,10 +33,17 @@ export interface StatusMeta {
   textClass: string;
   bgClass: string;
   borderClass: string;
+  /** The raw CSS custom property, for contexts that need a literal color
+   *  value (canvas/SVG) rather than a Tailwind arbitrary-value class. */
+  cssVar: string;
   /** True while the status represents work that may still change. */
   isActive: boolean;
   /** True once the status can never change again. */
   isTerminal: boolean;
+  /** True once handler code has actually run for this status — the FAILED
+   *  vs UPSTREAM_FAILED distinction in one flag, reused anywhere that needs
+   *  to distinguish "ran" from "never ran" (e.g. the execution strip). */
+  hasExecuted: boolean;
   spin?: boolean;
 }
 
@@ -46,17 +54,21 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-pending)]",
     bgClass: "bg-[var(--color-status-pending)]/10",
     borderClass: "border-[var(--color-status-pending)]/25",
+    cssVar: "--color-status-pending",
     isActive: false,
     isTerminal: false,
+    hasExecuted: false,
   },
   queued: {
     label: "Queued",
-    icon: CircleDot,
+    icon: CircleDashed,
     textClass: "text-[var(--color-status-queued)]",
     bgClass: "bg-[var(--color-status-queued)]/10",
     borderClass: "border-[var(--color-status-queued)]/25",
+    cssVar: "--color-status-queued",
     isActive: true,
     isTerminal: false,
+    hasExecuted: false,
   },
   running: {
     label: "Running",
@@ -64,9 +76,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-running)]",
     bgClass: "bg-[var(--color-status-running)]/10",
     borderClass: "border-[var(--color-status-running)]/30",
+    cssVar: "--color-status-running",
     isActive: true,
     isTerminal: false,
-    spin: true,
+    hasExecuted: true,
   },
   retrying: {
     label: "Retrying",
@@ -74,8 +87,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-retrying)]",
     bgClass: "bg-[var(--color-status-retrying)]/10",
     borderClass: "border-[var(--color-status-retrying)]/30",
+    cssVar: "--color-status-retrying",
     isActive: true,
     isTerminal: false,
+    hasExecuted: true,
     spin: true,
   },
   succeeded: {
@@ -84,8 +99,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-succeeded)]",
     bgClass: "bg-[var(--color-status-succeeded)]/10",
     borderClass: "border-[var(--color-status-succeeded)]/25",
+    cssVar: "--color-status-succeeded",
     isActive: false,
     isTerminal: true,
+    hasExecuted: true,
   },
   failed: {
     label: "Failed",
@@ -93,8 +110,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-failed)]",
     bgClass: "bg-[var(--color-status-failed)]/10",
     borderClass: "border-[var(--color-status-failed)]/25",
+    cssVar: "--color-status-failed",
     isActive: false,
     isTerminal: true,
+    hasExecuted: true,
   },
   upstream_failed: {
     label: "Upstream failed",
@@ -102,8 +121,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-upstream-failed)]",
     bgClass: "bg-[var(--color-status-upstream-failed)]/10",
     borderClass: "border-[var(--color-status-upstream-failed)]/25",
+    cssVar: "--color-status-upstream-failed",
     isActive: false,
     isTerminal: true,
+    hasExecuted: false,
   },
   cancelled: {
     label: "Cancelled",
@@ -111,8 +132,10 @@ export const STATUS_META: Record<Status, StatusMeta> = {
     textClass: "text-[var(--color-status-cancelled)]",
     bgClass: "bg-[var(--color-status-cancelled)]/10",
     borderClass: "border-[var(--color-status-cancelled)]/25",
+    cssVar: "--color-status-cancelled",
     isActive: false,
     isTerminal: true,
+    hasExecuted: false,
   },
 };
 

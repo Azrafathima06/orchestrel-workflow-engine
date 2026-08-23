@@ -143,9 +143,14 @@ export function BackendGate({ children }: { children: ReactNode }) {
 function GateScreen({ children }: { children: ReactNode }) {
   return (
     <div className="flex h-screen flex-col items-center justify-center gap-3 bg-[var(--color-surface-0)] px-6 text-center">
-      <div className="mb-2 flex items-center gap-2 text-[var(--color-text-tertiary)]">
-        <Workflow className="h-4 w-4" strokeWidth={1.75} />
-        <span className="text-xs font-medium">Workflow Engine</span>
+      <div className="mb-2 flex flex-col items-center gap-1 text-[var(--color-text-tertiary)]">
+        <div className="flex items-center gap-2">
+          <Workflow className="h-4 w-4" strokeWidth={1.75} />
+          <span className="text-xs font-medium">Orchestrel</span>
+        </div>
+        <span className="text-[10.5px] text-[var(--color-text-tertiary)]">
+          Distributed Workflow Control Plane
+        </span>
       </div>
       {children}
     </div>

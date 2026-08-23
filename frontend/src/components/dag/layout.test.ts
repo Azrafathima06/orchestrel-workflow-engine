@@ -65,19 +65,29 @@ describe("layoutDag", () => {
     expect(rfEdges[0].target).toBe("b");
   });
 
-  it("marks an edge animated only when its target is in the active set", () => {
+  it("marks an edge animated only when its target's real status is running/retrying", () => {
     const keys = ["a", "b", "c"];
     const edges: WorkflowEdge[] = [
       { source: "a", target: "b" },
       { source: "a", target: "c" },
     ];
 
-    const { edges: rfEdges } = layoutDag(keys, edges, new Set(["b"]));
+    const { edges: rfEdges } = layoutDag(keys, edges, { b: "running", c: "pending" });
 
     const toB = rfEdges.find((e) => e.target === "b");
     const toC = rfEdges.find((e) => e.target === "c");
     expect(toB?.animated).toBe(true);
     expect(toC?.animated).toBe(false);
+  });
+
+  it("gives a failed target's edge the failed color, not the active color", () => {
+    const keys = ["a", "b"];
+    const edges: WorkflowEdge[] = [{ source: "a", target: "b" }];
+
+    const { edges: rfEdges } = layoutDag(keys, edges, { b: "failed" });
+
+    expect(rfEdges[0].animated).toBe(false);
+    expect(rfEdges[0].style?.stroke).toBe("var(--color-status-failed)");
   });
 
   it("silently drops an edge referencing an unknown task rather than crashing", () => {
