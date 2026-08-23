@@ -1,0 +1,45 @@
+{
+  "key": "crash_recovery",
+  "name": "Worker Crash Recovery",
+  "description": "A long-running task used to demonstrate worker-loss recovery. If the executing worker dies, its lease expires, the recovery sweeper marks the attempt WorkerLost, and the ordinary retry path runs a new attempt on a surviving worker. timeout_seconds is set comfortably above the task's real runtime: the lease is derived from it, so a timeout below actual runtime would cause the sweeper to reclaim healthy attempts.",
+  "params_schema": {
+    "records": {
+      "type": "integer",
+      "default": 70000,
+      "description": "size of the deterministic workload"
+    }
+  },
+  "defaults": {
+    "retry": {
+      "max_attempts": 1
+    },
+    "timeout_seconds": 20
+  },
+  "tasks": [
+    {
+      "key": "heavy",
+      "handler": "recovery.heavy",
+      "params": {
+        "records": 70000,
+        "seed": 5
+      },
+      "depends_on": [],
+      "timeout_seconds": 20,
+      "retry": {
+        "max_attempts": 3,
+        "backoff_seconds": 1,
+        "backoff_factor": 2.0,
+        "max_backoff_seconds": 10,
+        "jitter": 0.0
+      }
+    },
+    {
+      "key": "verify",
+      "handler": "isolation.finalize",
+      "params": {},
+      "depends_on": [
+        "heavy"
+      ]
+    }
+  ]
+}

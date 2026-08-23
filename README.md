@@ -32,6 +32,25 @@ README reflects what is **actually implemented and verified today**; see
   `hostname:pid` of the process that executed it.
 - **Run and task history through the API** — run status, task states,
   attempts, outputs, timestamps, and durations.
+- **Automatic retries with exponential backoff** — a retriable failure moves
+  the task to `RETRYING` with a persisted `next_attempt_at`; it stays there
+  until that timestamp is genuinely due by the *database* clock. Each attempt
+  is its own `task_attempt` row.
+- **Permanent vs. retriable failures** — a `PermanentError` fails immediately
+  without consuming retries; unexpected exceptions are retried conservatively
+  while preserving the real exception type and traceback.
+- **Failure isolation** — a failed task marks only its transitive descendants
+  `UPSTREAM_FAILED` (never executed), distinct from `FAILED` (executed and
+  errored). Unrelated branches run to completion, and the run settles only
+  once no runnable work remains.
+- **Worker-loss recovery** — an abandoned attempt's lease expires, the sweeper
+  records it as `WorkerLost`, and the ordinary retry path runs a new attempt
+  on a surviving worker. Verified by `SIGKILL`ing a container mid-task.
+- **Broker-loss recovery** — PostgreSQL is the sole source of truth, so
+  destroying Redis mid-run loses no work: the recovery sweep re-dispatches
+  stale `QUEUED` tasks, releases overdue retries, and reconciles stalled runs.
+- **Zombie-completion safety** — a resurrected worker cannot overwrite state
+  that recovery has already advanced past.
 
 ## Current stack
 
@@ -41,15 +60,44 @@ README reflects what is **actually implemented and verified today**; see
 - **Dependency management:** [uv](https://docs.astral.sh/uv/)
 - **Containerization:** Docker Compose
 
+## Reliability model
+
+The guarantee, stated precisely:
+
+> **At-least-once message delivery**, combined with **compare-and-set guarded
+> state transitions**, giving **at-most-once committed outcome per attempt
+> number**.
+
+- Every state change is `UPDATE ... WHERE <expected status> AND <expected
+  attempt>`, acting only on `rowcount == 1`. Under `READ COMMITTED` a blocked
+  `UPDATE` re-evaluates its `WHERE` against the committed row, so of N racing
+  processes exactly one wins. Duplicate broker deliveries are therefore
+  ordinary and harmless, not exceptional.
+- State is committed *before* the corresponding message is published, so a
+  message never references uncommitted state. The window this opens — a
+  process dying between commit and publish — is closed by detection (a
+  30-second recovery sweep reading PostgreSQL) rather than by a transactional
+  outbox, which would close only that one hole and still require the sweep
+  for broker loss and worker loss.
+- All durability-sensitive timestamps use PostgreSQL's clock, so recovery
+  never depends on clocks agreeing across processes.
+
+**We do not claim exactly-once handler execution.** If a worker becomes
+unreachable *after* producing an external side effect but *before* committing
+success, its attempt is reclaimed and a later attempt re-runs the handler. Its
+stale completion is rejected, so engine state stays correct — but the side
+effect already happened. **Handlers are therefore contractually required to be
+idempotent.** Every demo handler is deterministic and side-effect-free, so the
+contract holds trivially here.
+
 ## Not yet implemented
 
 Stated explicitly so nothing above is mistaken for more than it is:
 
-- automatic retries and exponential backoff (retry *policy* is implemented
-  and unit-tested; nothing retries at runtime yet — a failed task fails)
-- failure isolation / `UPSTREAM_FAILED` propagation
-- worker crash recovery and broker-loss recovery
-- scheduled (cron) execution
+- exactly-once handler execution (see the reliability model above)
+- scheduled (cron) execution — Celery Beat currently drives only the recovery
+  sweep, not user-defined schedules
+- run cancellation
 - React dashboard
 - public deployment
 
@@ -75,10 +123,18 @@ Stated explicitly so nothing above is mistaken for more than it is:
 - **Explicit state machines.** Workflow and task status are modeled as
   enums with an explicit legal-transition table (`app/core/states.py`);
   illegal transitions raise rather than silently succeed.
-- **Retry policy (not yet retry execution).** `app/core/retry.py` computes
-  exponential backoff with jitter and classifies errors as retriable or
-  permanent. This is the policy the task runner will apply once retry
-  execution lands; today a failed task fails without retrying.
+- **Retry policy and execution.** `app/core/retry.py` computes exponential
+  backoff with jitter (randomness injected, so it is deterministic in tests)
+  and classifies errors as retriable or permanent.
+  `app/orchestration/failure.py` applies that decision, and is shared by both
+  the task runner and lease recovery so `WorkerLost` inherits the ordinary
+  retry policy rather than needing a parallel mechanism.
+- **Recovery sweep.** `app/orchestration/recovery.py` runs four bounded,
+  CAS-guarded queries every 30 seconds (Celery Beat is a dumb heartbeat; all
+  intelligence is in the SQL): re-dispatch stale `QUEUED` tasks, reclaim
+  expired leases, release overdue retries, and reconcile stalled runs. A
+  `dispatch_count` circuit breaker fails a task as `UndeliverableTask` rather
+  than re-dispatching forever.
 - **Orchestration layer.** A pure `planner` decides what should happen next
   from a snapshot of task states; a `reconciler` applies those decisions
   under a `SELECT ... FOR UPDATE` row lock, using guarded compare-and-set
@@ -149,6 +205,24 @@ table straight from `task_attempt`, then computes how many distinct workers
 ran shards and how many shard intervals overlap. Exits non-zero if the run
 does not actually demonstrate parallelism.
 
+### Verifying reliability yourself
+
+```bash
+cd backend && uv run python scripts/reliability_report.py $RUN
+```
+
+Prints per-task status and attempt counts, then every attempt with its
+worker, duration, error type, and the **real gap** between attempts computed
+from persisted timestamps — so the backoff curve can be checked rather than
+taken on trust. Also summarises `WorkerLost` attempts and sweeper
+re-dispatches.
+
+To watch worker-loss recovery live, `docker compose -f docker-compose.yml -f
+docker-compose.recovery-test.yml up -d --scale worker=3` uses shortened
+recovery thresholds (a test-only overlay — production defaults stay
+conservative), then trigger `crash_recovery` and `docker kill` the container
+whose id appears as the running task's `worker_id`.
+
 ### Two demo workflows
 
 - **`sequential_etl`** — `extract → transform → validate → load`. Each stage
@@ -158,6 +232,14 @@ does not actually demonstrate parallelism.
 - **`fanout_join`** — `split → 4 shards → merge`. Shards run concurrently on
   different workers; `merge` waits for all four, then verifies the combined
   aggregate against a single-pass recomputation.
+- **`retry_backoff`** — `prepare → flaky_fetch → persist`. `flaky_fetch` fails
+  deterministically for its first `fail_until - 1` attempts. Raise
+  `fail_until` above `max_attempts` to demonstrate retry exhaustion instead.
+- **`failure_isolation`** — two branches from a shared seed. Branch A fails
+  permanently; branch B completes anyway; tasks downstream of the failure are
+  `UPSTREAM_FAILED` with zero attempts.
+- **`crash_recovery`** — one long-running task, used to demonstrate
+  worker-loss recovery by killing its container mid-execution.
 
 Handlers do real CPU work (SHA-256 digests and aggregation), not `sleep()`.
 Intermediate outputs are compact descriptors — a seed plus a range plus

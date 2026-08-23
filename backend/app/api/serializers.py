@@ -34,6 +34,8 @@ def task_to_summary(session: Session, task: TaskRun) -> TaskRunSummary:
         depends_on=list(task.depends_on),
         attempt_count=task.attempt_count,
         max_attempts=task.max_attempts,
+        next_attempt_at=task.next_attempt_at,
+        dispatch_count=task.dispatch_count,
         worker_id=_latest_worker_id(session, task.id),
         started_at=task.started_at,
         finished_at=task.finished_at,
@@ -91,6 +93,8 @@ def task_to_detail(session: Session, task: TaskRun) -> TaskRunDetail:
                 duration_ms=a.duration_ms,
                 error_type=a.error_type,
                 error_message=a.error_message,
+                traceback=a.traceback,
+                logs=a.logs,
             )
             for a in attempts
         ],

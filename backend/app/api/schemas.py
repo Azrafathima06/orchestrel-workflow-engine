@@ -41,6 +41,9 @@ class TaskRunSummary(BaseModel):
     depends_on: list[str]
     attempt_count: int
     max_attempts: int
+    # Retry / recovery evidence, all read from persisted state.
+    next_attempt_at: datetime | None
+    dispatch_count: int
     worker_id: str | None
     started_at: datetime | None
     finished_at: datetime | None
@@ -74,6 +77,8 @@ class AttemptDetail(BaseModel):
     duration_ms: int | None
     error_type: str | None
     error_message: str | None
+    traceback: str | None
+    logs: list[dict[str, Any]] | None
 
 
 class TaskRunDetail(TaskRunSummary):

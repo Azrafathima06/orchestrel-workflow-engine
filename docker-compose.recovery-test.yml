@@ -1,0 +1,31 @@
+# Test-only overlay for demonstrating worker-loss recovery in seconds rather
+# than minutes. Production defaults (in .env.example) are deliberately
+# conservative; this file exists so a demo can be watched live without
+# weakening those defaults.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.recovery-test.yml \
+#     up -d --scale worker=3
+services:
+  worker:
+    environment:
+      # Lease = task timeout_seconds + this grace. crash_recovery declares a
+      # 10s timeout, so a killed worker's attempt is reclaimable after ~15s.
+      LEASE_GRACE_SECONDS: 5
+      SCHEDULER_TICK_SECONDS: 10
+      RETRY_RELEASE_GRACE_SECONDS: 5
+      QUEUED_STALE_SECONDS: 20
+      RUN_STALL_SECONDS: 20
+  beat:
+    environment:
+      LEASE_GRACE_SECONDS: 5
+      SCHEDULER_TICK_SECONDS: 10
+      RETRY_RELEASE_GRACE_SECONDS: 5
+      QUEUED_STALE_SECONDS: 20
+      RUN_STALL_SECONDS: 20
+  api:
+    environment:
+      LEASE_GRACE_SECONDS: 5
+      SCHEDULER_TICK_SECONDS: 10
+      RETRY_RELEASE_GRACE_SECONDS: 5
+      QUEUED_STALE_SECONDS: 20
+      RUN_STALL_SECONDS: 20

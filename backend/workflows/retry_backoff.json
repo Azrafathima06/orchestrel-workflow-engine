@@ -1,0 +1,43 @@
+{
+  "key": "retry_backoff",
+  "name": "Retry with Exponential Backoff",
+  "description": "Demonstrates automatic retries with exponential backoff. The middle stage fails deterministically for its first (fail_until - 1) attempts, then succeeds. Set fail_until above max_attempts to demonstrate retry exhaustion instead.",
+  "params_schema": {
+    "fail_until": {
+      "type": "integer",
+      "default": 3,
+      "description": "flaky_fetch succeeds on this attempt number; higher than max_attempts exhausts retries"
+    }
+  },
+  "defaults": {
+    "retry": { "max_attempts": 1 },
+    "timeout_seconds": 120
+  },
+  "tasks": [
+    {
+      "key": "prepare",
+      "handler": "retry.prepare",
+      "params": { "seed": 11, "record_count": 600 },
+      "depends_on": []
+    },
+    {
+      "key": "flaky_fetch",
+      "handler": "retry.flaky_fetch",
+      "params": { "fail_until": 3 },
+      "depends_on": ["prepare"],
+      "retry": {
+        "max_attempts": 4,
+        "backoff_seconds": 2,
+        "backoff_factor": 2.0,
+        "max_backoff_seconds": 30,
+        "jitter": 0.1
+      }
+    },
+    {
+      "key": "persist",
+      "handler": "retry.persist",
+      "params": {},
+      "depends_on": ["flaky_fetch"]
+    }
+  ]
+}

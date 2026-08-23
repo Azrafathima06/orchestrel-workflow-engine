@@ -104,5 +104,31 @@ services:
     # Either one makes the service unscalable, and this is the service we
     # scale: `docker compose up -d --scale worker=3`.
 
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    # Exactly one Beat, ever. Two would double every recovery tick. Its only
+    # job is to emit scheduler_tick on an interval — all recovery logic lives
+    # in PostgreSQL queries, not in Beat's schedule.
+    # --schedule writes Beat's last-run bookkeeping to a path the non-root
+    # container user can write. Losing that file is harmless: our schedule is
+    # static (one recovery tick), so a restart just fires the next tick
+    # immediately, and the sweep is idempotent.
+    command: >
+      celery -A app.worker.celery_app beat
+      --loglevel=info
+      --schedule=/tmp/celerybeat-schedule
+    env_file:
+      - .env
+    environment: *backend_env
+    volumes:
+      - ./backend/app:/app/app
+    depends_on:
+      seed:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
 volumes:
   postgres_data:

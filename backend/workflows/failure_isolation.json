@@ -1,0 +1,22 @@
+{
+  "key": "failure_isolation",
+  "name": "Failure Isolation",
+  "description": "Two independent branches from a shared seed. Branch A fails permanently at its second step; branch B runs to completion regardless. Tasks downstream of the failure are marked UPSTREAM_FAILED (never executed) rather than FAILED (executed and errored).",
+  "defaults": {
+    "retry": { "max_attempts": 1 },
+    "timeout_seconds": 120
+  },
+  "tasks": [
+    { "key": "seed", "handler": "isolation.seed", "params": { "seed": 21, "record_count": 800 }, "depends_on": [] },
+
+    { "key": "branch_a1", "handler": "isolation.step", "params": { "offset": 1 }, "depends_on": ["seed"] },
+    { "key": "branch_a2", "handler": "isolation.always_fails", "params": { "max_allowed_sum": 0 }, "depends_on": ["branch_a1"] },
+    { "key": "branch_a3", "handler": "isolation.step", "params": { "offset": 3 }, "depends_on": ["branch_a2"] },
+
+    { "key": "branch_b1", "handler": "isolation.step", "params": { "offset": 11 }, "depends_on": ["seed"] },
+    { "key": "branch_b2", "handler": "isolation.step", "params": { "offset": 12 }, "depends_on": ["branch_b1"] },
+    { "key": "branch_b3", "handler": "isolation.step", "params": { "offset": 13 }, "depends_on": ["branch_b2"] },
+
+    { "key": "finalize", "handler": "isolation.finalize", "params": {}, "depends_on": ["branch_a3", "branch_b3"] }
+  ]
+}

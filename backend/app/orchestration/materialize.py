@@ -56,7 +56,7 @@ def create_run(
                 handler=task.handler,
                 status=TaskStatus.PENDING,
                 depends_on=list(task.depends_on),
-                params=dict(task.params),
+                params=_effective_task_params(spec, task, params),
                 attempt_count=0,
                 max_attempts=spec.effective_retry_policy(task).max_attempts,
                 timeout_seconds=spec.effective_timeout_seconds(task),
@@ -65,3 +65,20 @@ def create_run(
 
     session.flush()
     return run
+
+
+def _effective_task_params(spec: WorkflowSpec, task, run_params: dict) -> dict:
+    """Task params with run-level overrides applied.
+
+    Only keys the workflow explicitly declares in `params_schema` may be
+    overridden, and only on tasks that already define them. That keeps the
+    trigger API from injecting arbitrary keys into handler inputs while
+    still letting a run tune declared knobs — e.g. `fail_until` on
+    retry_backoff, which is what lets one workflow demonstrate both
+    "succeeds after retries" and "exhausts retries".
+    """
+    effective = dict(task.params)
+    for key in spec.params_schema:
+        if key in run_params and key in effective:
+            effective[key] = run_params[key]
+    return effective

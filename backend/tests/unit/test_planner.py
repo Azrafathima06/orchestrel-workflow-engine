@@ -125,3 +125,86 @@ class TestIdempotence:
         first = plan(WorkflowStatus.RUNNING, tasks)
         second = plan(WorkflowStatus.RUNNING, tasks)
         assert first == second
+
+
+class TestFailureIsolation:
+    def _two_branches(self, a2: TaskStatus, b_states: list[TaskStatus]):
+        """seed -> (a1,a2,a3) and (b1,b2,b3) -> finalize."""
+        return (
+            snap("seed", S),
+            snap("a1", S, ("seed",)),
+            snap("a2", a2, ("a1",)),
+            snap("a3", P, ("a2",)),
+            snap("b1", b_states[0], ("seed",)),
+            snap("b2", b_states[1], ("b1",)),
+            snap("b3", b_states[2], ("b2",)),
+            snap("finalize", P, ("a3", "b3")),
+        )
+
+    def test_failure_blocks_only_its_own_descendants(self) -> None:
+        tasks = self._two_branches(F, [P, P, P])
+        decisions = plan(WorkflowStatus.RUNNING, tasks)
+
+        blocked = {b.task_key for b in decisions.blocked_tasks}
+        assert blocked == {"a3", "finalize"}
+        # The independent branch is untouched and still advancing.
+        assert "b1" in decisions.ready_task_keys
+        assert "b1" not in blocked
+
+    def test_blocked_task_records_the_direct_culprit(self) -> None:
+        tasks = self._two_branches(F, [P, P, P])
+        decisions = plan(WorkflowStatus.RUNNING, tasks)
+        by_key = {b.task_key: b.blocked_by for b in decisions.blocked_tasks}
+
+        assert by_key["a3"] == "a2"
+        # finalize is blocked by its own direct dependency, not the root cause.
+        assert by_key["finalize"] == "a3"
+
+    def test_run_stays_running_while_the_other_branch_works(self) -> None:
+        tasks = self._two_branches(F, [S, R, P])
+        decisions = plan(WorkflowStatus.RUNNING, tasks)
+
+        assert decisions.run_failed is False, "must not fail while b2 is still running"
+        assert decisions.run_succeeded is False
+
+    def test_run_fails_only_once_all_remaining_work_settles(self) -> None:
+        tasks = self._two_branches(F, [S, S, S])
+        decisions = plan(WorkflowStatus.RUNNING, tasks)
+
+        assert decisions.run_failed is True
+        assert decisions.run_error is not None
+        assert "a2" in decisions.run_error
+
+    def test_upstream_failed_propagates_transitively(self) -> None:
+        tasks = (
+            snap("root", F),
+            snap("x", P, ("root",)),
+            snap("y", P, ("x",)),
+            snap("z", P, ("y",)),
+        )
+        blocked = {b.task_key for b in plan(WorkflowStatus.RUNNING, tasks).blocked_tasks}
+        assert blocked == {"x", "y", "z"}
+
+    def test_already_upstream_failed_dependency_also_blocks(self) -> None:
+        tasks = (snap("a", TaskStatus.UPSTREAM_FAILED), snap("b", P, ("a",)))
+        blocked = {x.task_key for x in plan(WorkflowStatus.RUNNING, tasks).blocked_tasks}
+        assert blocked == {"b"}
+
+    def test_cancelled_dependency_blocks_downstream(self) -> None:
+        tasks = (snap("a", TaskStatus.CANCELLED), snap("b", P, ("a",)))
+        blocked = {x.task_key for x in plan(WorkflowStatus.RUNNING, tasks).blocked_tasks}
+        assert blocked == {"b"}
+
+    def test_retrying_task_does_not_block_downstream(self) -> None:
+        """A RETRYING task may still succeed — its branch must not be
+        declared dead, and the run must not settle."""
+        tasks = (snap("a", TaskStatus.RETRYING), snap("b", P, ("a",)))
+        decisions = plan(WorkflowStatus.RUNNING, tasks)
+
+        assert decisions.blocked_tasks == ()
+        assert decisions.run_failed is False
+        assert decisions.ready_task_keys == ()
+
+    def test_finished_failed_run_produces_no_further_decisions(self) -> None:
+        tasks = self._two_branches(F, [S, S, S])
+        assert plan(WorkflowStatus.FAILED, tasks).is_noop

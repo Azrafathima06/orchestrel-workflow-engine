@@ -31,7 +31,13 @@ class Settings(BaseSettings):
     max_dispatch_attempts: int = 5
     sweep_batch: int = 100
     scheduler_tick_seconds: int = 30
-    broker_visibility_timeout: int = 900
+    # Must exceed max_task_timeout_seconds + lease_grace_seconds +
+    # max_retry_countdown_seconds (asserted at Celery startup), or Redis
+    # redelivers messages that are still legitimately in flight.
+    # A long value is safe here precisely because we do NOT depend on
+    # broker redelivery for worker-loss recovery — the PostgreSQL lease
+    # sweep owns that, and it reacts in seconds rather than hours.
+    broker_visibility_timeout: int = 7200
 
     # Upper bound on a handler's serialized JSON output before we refuse to
     # persist it. task_run.output is JSONB in a free-tier database; a handler
@@ -40,8 +46,15 @@ class Settings(BaseSettings):
     max_task_output_bytes: int = 131072
 
     # Task lease headroom, added to a task's own timeout_seconds when a
-    # worker claims an attempt. Consumed by the M5 recovery sweeper.
+    # worker claims an attempt. Consumed by the recovery sweeper.
     lease_seconds_default: int = 300
+
+    # Bounds used only to assert broker timing consistency at startup:
+    # visibility_timeout must exceed the longest possible in-flight time.
+    # max_task_timeout_seconds mirrors the ceiling enforced by the spec
+    # model; max_retry_countdown_seconds mirrors the backoff cap.
+    max_task_timeout_seconds: int = 3600
+    max_retry_countdown_seconds: int = 300
 
     @property
     def cors_origins_list(self) -> list[str]:

@@ -21,7 +21,7 @@ tests can assert exact values rather than "something happened".
 import hashlib
 from typing import Any
 
-from app.core.errors import PermanentError
+from app.core.errors import PermanentError, RetriableError
 from app.handlers.registry import HandlerContext, handler
 
 # Tuned so one shard is roughly 0.5-1.5s of real work on a development
@@ -343,4 +343,190 @@ def merge(
         "max": combined_max,
         "combined_checksum": combined_checksum,
         "verified_against_single_pass": True,
+    }
+
+
+# --------------------------------------------------------------- retry_backoff
+
+
+@handler("retry.prepare")
+def retry_prepare(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Produce the deterministic dataset descriptor the flaky stage will fetch."""
+    seed = int(params.get("seed", 11))
+    record_count = int(params.get("record_count", 600))
+
+    stats = _process_range(seed, 0, record_count)
+    context.logger.info("prepare_complete", records=stats["count"])
+
+    return {
+        "seed": seed,
+        "record_count": record_count,
+        "prepared_checksum": stats["checksum"],
+    }
+
+
+@handler("retry.flaky_fetch")
+def flaky_fetch(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Fail deterministically for the first `fail_until - 1` attempts, then succeed.
+
+    Deterministic, not random: the same run produces the same sequence of
+    failures every time, so the retry/backoff demonstration is reproducible
+    and the tests can assert exact attempt counts. Nothing about this is
+    simulated at the orchestration layer — the handler genuinely raises, the
+    runner genuinely records a failed attempt, and the engine genuinely
+    schedules the next one.
+
+    `fail_until` is a run parameter, so the same workflow demonstrates both
+    "succeeds after retries" and "exhausts its retries" depending on input.
+    """
+    source = _require(upstream_outputs, "prepare")
+    fail_until = int(params.get("fail_until", 3))
+
+    if context.attempt_number < fail_until:
+        raise RetriableError(
+            f"upstream source unavailable (attempt {context.attempt_number} "
+            f"of a required {fail_until})"
+        )
+
+    # Real work on the successful attempt.
+    seed = int(source["seed"])
+    record_count = int(source["record_count"])
+    stats = _process_range(seed, 0, record_count)
+
+    context.logger.info("flaky_fetch_succeeded", attempt=context.attempt_number)
+
+    return {
+        "attempt_that_succeeded": context.attempt_number,
+        "fetched_records": stats["count"],
+        "fetch_checksum": stats["checksum"],
+        "prepared_checksum": source["prepared_checksum"],
+    }
+
+
+@handler("retry.persist")
+def retry_persist(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Verify the fetched data matches what prepare described, then summarise."""
+    fetched = _require(upstream_outputs, "flaky_fetch")
+
+    if fetched["fetch_checksum"] != fetched["prepared_checksum"]:
+        raise PermanentError("fetched data does not match the prepared checksum")
+
+    canonical = f"records={fetched['fetched_records']}|checksum={fetched['fetch_checksum']}"
+    context.logger.info("persist_complete", records=fetched["fetched_records"])
+
+    return {
+        "records_persisted": fetched["fetched_records"],
+        "succeeded_on_attempt": fetched["attempt_that_succeeded"],
+        "final_checksum": hashlib.sha256(canonical.encode()).hexdigest(),
+    }
+
+
+# ------------------------------------------------------------ failure_isolation
+
+
+@handler("isolation.seed")
+def isolation_seed(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Shared root of both branches."""
+    seed = int(params.get("seed", 21))
+    record_count = int(params.get("record_count", 800))
+    stats = _process_range(seed, 0, record_count)
+    context.logger.info("seed_complete", records=stats["count"])
+    return {"seed": seed, "record_count": record_count, "checksum": stats["checksum"]}
+
+
+@handler("isolation.step")
+def isolation_step(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """An ordinary branch step: real work over a slice of the seeded range."""
+    upstream = next((v for v in upstream_outputs.values() if isinstance(v, dict)), None)
+    if upstream is None:
+        raise PermanentError("isolation.step received no upstream output")
+
+    seed = int(upstream.get("seed", 21))
+    record_count = int(upstream.get("record_count", 800))
+    offset = int(params.get("offset", 0))
+
+    stats = _process_range(seed + offset, 0, record_count)
+    context.logger.info("step_complete", step=context.task_key, records=stats["count"])
+
+    return {
+        "seed": seed,
+        "record_count": record_count,
+        "step": context.task_key,
+        "checksum": stats["checksum"],
+    }
+
+
+@handler("isolation.always_fails")
+def isolation_always_fails(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Does real work, then fails permanently on a genuine validation rule.
+
+    PermanentError, so the retry engine correctly declines to retry it —
+    which is what makes this a clean failure-isolation demo rather than a
+    retry demo.
+    """
+    upstream = next((v for v in upstream_outputs.values() if isinstance(v, dict)), None)
+    if upstream is None:
+        raise PermanentError("isolation.always_fails received no upstream output")
+
+    seed = int(upstream.get("seed", 21))
+    record_count = int(upstream.get("record_count", 800))
+    stats = _process_range(seed, 0, record_count)
+
+    # A real rule evaluated against real computed data; the threshold is
+    # chosen so this branch always violates it.
+    threshold = int(params.get("max_allowed_sum", 0))
+    if stats["sum"] > threshold:
+        raise PermanentError(
+            f"data quality check failed: aggregate {stats['sum']} exceeds "
+            f"permitted maximum {threshold}"
+        )
+
+    return {"unreachable": True}
+
+
+@handler("isolation.finalize")
+def isolation_finalize(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """Join of both branches. Never runs when either branch failed."""
+    context.logger.info("finalize_complete", inputs=len(upstream_outputs))
+    return {"branches_joined": len(upstream_outputs)}
+
+
+# ------------------------------------------------------------- crash_recovery
+
+
+@handler("recovery.heavy")
+def recovery_heavy(
+    context: HandlerContext, params: dict[str, Any], upstream_outputs: dict[str, Any]
+) -> dict[str, Any]:
+    """A deliberately long-running task, used to demonstrate worker-loss recovery.
+
+    Long because of real work, not sleep: the duration comes from hashing a
+    large deterministic range, so killing the worker mid-task interrupts
+    genuine computation. `records` is a run parameter so the workload can be
+    sized to the machine without editing code.
+    """
+    records = int(params.get("records", 70000))
+    seed = int(params.get("seed", 5))
+
+    stats = _process_range(seed, 0, records)
+    context.logger.info("heavy_complete", records=stats["count"], attempt=context.attempt_number)
+
+    return {
+        "records": stats["count"],
+        "checksum": stats["checksum"],
+        "completed_on_attempt": context.attempt_number,
     }

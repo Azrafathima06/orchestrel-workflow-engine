@@ -13,6 +13,8 @@ import uuid
 from app.db.session import SessionLocal
 from app.orchestration.dispatch import CeleryDispatcher
 from app.orchestration.reconciler import reconcile_run
+from app.orchestration.recovery import recovery_sweep
+from app.orchestration.release import release_retry_task
 from app.orchestration.runner import execute_task_attempt
 from app.worker.celery_app import celery_app
 
@@ -39,3 +41,24 @@ def execute_task(self, task_run_id: str, expected_attempt: int) -> None:
         # makes a message traceable from broker to database when debugging.
         celery_task_id=self.request.id,
     )
+
+
+@celery_app.task(name="app.worker.tasks.release_retry")
+def release_retry(task_run_id: str, expected_attempt: int) -> None:
+    release_retry_task(
+        task_run_id=uuid.UUID(task_run_id),
+        expected_attempt=expected_attempt,
+        dispatcher=_dispatcher,
+        session_factory=SessionLocal,
+    )
+
+
+@celery_app.task(name="app.worker.tasks.scheduler_tick")
+def scheduler_tick() -> dict[str, int]:
+    """Periodic heartbeat driving recovery.
+
+    Celery Beat's only job in this system: fire this task on an interval.
+    All recovery intelligence lives in PostgreSQL queries, not in Beat.
+    """
+    report = recovery_sweep(dispatcher=_dispatcher, session_factory=SessionLocal)
+    return report.as_dict()

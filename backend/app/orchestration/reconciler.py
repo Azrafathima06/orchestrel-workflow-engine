@@ -142,6 +142,64 @@ def _reconcile_transaction(session: Session, run_id: uuid.UUID) -> list[tuple[uu
         dispatches.append((task.id, task.attempt_count + 1))
         log.info("task_queued", task_key=task_key, task_run_id=str(task.id))
 
+    # Failure isolation: tasks whose dependencies can never succeed are
+    # marked UPSTREAM_FAILED (never ran) rather than FAILED (ran and
+    # errored). Unrelated branches are simply absent from this list and keep
+    # running.
+    for blocked in decisions.blocked_tasks:
+        task = by_key.get(blocked.task_key)
+        if task is None:
+            continue
+        marked = session.execute(
+            update(TaskRun)
+            .where(
+                TaskRun.id == task.id,
+                TaskRun.status == TaskStatus.PENDING,
+                TaskRun.attempt_count == task.attempt_count,
+            )
+            .values(
+                status=TaskStatus.UPSTREAM_FAILED,
+                finished_at=func.now(),
+                error_type="UpstreamFailed",
+                error_message=(
+                    f"skipped: upstream task '{blocked.blocked_by}' did not succeed"
+                ),
+            )
+        ).rowcount
+
+        if marked == 1:
+            log.info(
+                "upstream_failed",
+                task_key=blocked.task_key,
+                blocked_by=blocked.blocked_by,
+                task_run_id=str(task.id),
+            )
+
+    if decisions.run_failed:
+        validate_workflow_transition(effective_status, WorkflowStatus.FAILED)
+        session.execute(
+            update(WorkflowRun)
+            .where(
+                WorkflowRun.id == run_id,
+                WorkflowRun.status.in_([WorkflowStatus.RUNNING, WorkflowStatus.PENDING]),
+            )
+            .values(
+                status=WorkflowStatus.FAILED,
+                finished_at=func.now(),
+                duration_ms=cast(
+                    func.extract(
+                        "epoch",
+                        func.now()
+                        - func.coalesce(WorkflowRun.started_at, WorkflowRun.created_at),
+                    )
+                    * 1000,
+                    Integer,
+                ),
+                error=decisions.run_error,
+            )
+        )
+        log.info("run_failed", error=decisions.run_error)
+
     if decisions.run_succeeded:
         validate_workflow_transition(effective_status, WorkflowStatus.SUCCEEDED)
         session.execute(

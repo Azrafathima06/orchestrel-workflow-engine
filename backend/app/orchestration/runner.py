@@ -34,6 +34,7 @@ from app.handlers import get_handler
 from app.handlers.registry import HandlerContext
 from app.logging import get_logger
 from app.orchestration.dispatch import Dispatcher
+from app.orchestration.failure import apply_failure, resolve_retry_policy
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -113,9 +114,14 @@ def execute_task_attempt(
         output = _serialize_output(raw_output, settings.max_task_output_bytes)
     except Exception as exc:
         _complete_failure(
-            session_factory, task_run_id, claim["attempt_number"], exc, log
+            session_factory,
+            task_run_id,
+            claim["attempt_number"],
+            exc,
+            claim["run_id"],
+            dispatcher,
+            log,
         )
-        dispatcher.dispatch_reconcile(claim["run_id"])
         return
 
     _complete_success(session_factory, task_run_id, claim["attempt_number"], output, log)
@@ -271,54 +277,64 @@ def _complete_failure(
     task_run_id: uuid.UUID,
     attempt_number: int,
     exc: Exception,
+    run_id: uuid.UUID,
+    dispatcher: Dispatcher,
     log,
 ) -> None:
-    """Phase C (failure).
+    """Phase C (failure): record the attempt, then retry or fail terminally.
 
-    M3/M4 scope: an attempt failure fails the task outright. Retry
-    eligibility, backoff, and RETRYING land in M5 — they slot in here, at
-    the point where this currently writes FAILED unconditionally.
+    The decision itself lives in app.orchestration.failure so that lease
+    recovery (WorkerLost) produces identical accounting.
     """
-    error_type = type(exc).__name__
-    error_message = str(exc)[:2000]
+    traceback_text = traceback.format_exc()[:8000]
 
     with session_factory() as session:
-        updated = session.execute(
-            update(TaskRun)
-            .where(
-                TaskRun.id == task_run_id,
-                TaskRun.status == TaskStatus.RUNNING,
-                TaskRun.attempt_count == attempt_number,
-            )
-            .values(
-                status=TaskStatus.FAILED,
-                finished_at=func.now(),
-                duration_ms=cast(
-                    func.extract("epoch", func.now() - TaskRun.started_at) * 1000, Integer
-                ),
-                lease_expires_at=None,
-                error_type=error_type,
-                error_message=error_message,
-            )
-        ).rowcount
+        task = session.get(TaskRun, task_run_id)
+        if task is None:
+            session.rollback()
+            return
 
-        if updated != 1:
+        policy = resolve_retry_policy(session, task)
+        outcome = apply_failure(
+            session,
+            task_run_id=task_run_id,
+            attempt_number=attempt_number,
+            exc=exc,
+            policy=policy,
+            traceback_text=traceback_text,
+        )
+
+        if outcome is None:
+            # Our attempt was superseded while we were failing it.
             session.rollback()
             log.warning("orphaned_completion", outcome="failed_but_discarded")
             return
 
-        _finish_attempt(
-            session,
-            task_run_id,
-            attempt_number,
-            AttemptStatus.FAILED,
-            error_type=error_type,
-            error_message=error_message,
-            tb=traceback.format_exc()[:8000],
-        )
         session.commit()
 
-    log.warning("task_failed", error_type=error_type, error_message=error_message)
+    error_type = type(exc).__name__
+
+    if outcome.retried:
+        # An expected retriable failure is not an ERROR-level event: the
+        # traceback is persisted on the attempt row for inspection, and the
+        # system is behaving as designed.
+        log.info(
+            "task_retry_scheduled",
+            error_type=error_type,
+            attempt=attempt_number,
+            max_attempts=policy.max_attempts,
+            next_attempt=outcome.next_attempt,
+            delay_seconds=round(outcome.delay_seconds or 0.0, 3),
+        )
+        # Strictly after commit, and NOT a reconcile: the task has not
+        # terminally failed, so its branch must not advance.
+        dispatcher.dispatch_release_retry(
+            task_run_id, outcome.next_attempt, outcome.delay_seconds or 0.0
+        )
+        return
+
+    log.warning("task_failed", error_type=error_type, error_message=str(exc)[:200])
+    dispatcher.dispatch_reconcile(run_id)
 
 
 def _finish_attempt(

@@ -74,5 +74,40 @@ celery_app.conf.update(
     },
 )
 
+celery_app.conf.beat_schedule = {
+    "recovery-sweep": {
+        "task": "app.worker.tasks.scheduler_tick",
+        "schedule": float(settings.scheduler_tick_seconds),
+        "options": {"queue": "orchestrator"},
+    }
+}
+
+
+def _assert_timing_config_is_consistent() -> None:
+    """Fail fast on a broker timeout that cannot hold our longest in-flight work.
+
+    If `visibility_timeout` is shorter than the longest legitimate time a
+    message can be outstanding, Redis redelivers work that is still running.
+    Our claim guard would reject the duplicate, but the task would then sit
+    un-acked and the failure mode is confusing. Better to refuse to start.
+    """
+    longest_in_flight = (
+        settings.max_task_timeout_seconds
+        + settings.lease_grace_seconds
+        + settings.max_retry_countdown_seconds
+    )
+    if settings.broker_visibility_timeout <= longest_in_flight:
+        raise ValueError(
+            "broker_visibility_timeout "
+            f"({settings.broker_visibility_timeout}s) must exceed the longest "
+            f"possible in-flight time ({longest_in_flight}s = task timeout "
+            f"{settings.max_task_timeout_seconds}s + lease grace "
+            f"{settings.lease_grace_seconds}s + max retry countdown "
+            f"{settings.max_retry_countdown_seconds}s)"
+        )
+
+
+_assert_timing_config_is_consistent()
+
 # Import for side effects: registers the task functions with this app.
 celery_app.autodiscover_tasks(["app.worker"], force=True)
