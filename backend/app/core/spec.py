@@ -55,6 +55,11 @@ class WorkflowSpec(BaseModel):
     key: str = Field(min_length=1)
     name: str = Field(min_length=1)
     description: str = ""
+    # Whether an unauthenticated caller may trigger this workflow. Fault
+    # injection workflows (crash_recovery) stay seeded, visible, and fully
+    # documented, but are not runnable from a public deployment where a
+    # deliberately heavy workload would degrade the shared instance.
+    is_public: bool = True
     params_schema: dict[str, Any] = Field(default_factory=dict)
     defaults: WorkflowDefaults = Field(default_factory=WorkflowDefaults)
     tasks: tuple[TaskSpec, ...] = Field(min_length=1)

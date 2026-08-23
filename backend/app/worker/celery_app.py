@@ -32,6 +32,16 @@ celery_app.conf.update(
     # shards while its peers idle, and the fan-out would only *look*
     # distributed.
     worker_prefetch_multiplier=1,
+    # ---- Execution time limits ---------------------------------------
+    # Without these, `timeout_seconds` only sized the recovery lease: a
+    # runaway handler kept burning CPU while the lease expired and the
+    # sweeper started a NEW attempt, so one request could multiply into
+    # several concurrent runaway loops. The soft limit raises
+    # SoftTimeLimitExceeded *inside* the handler, so the attempt is recorded
+    # and retried through the ordinary path; the hard limit is the backstop
+    # that kills a child ignoring the soft signal.
+    task_soft_time_limit=settings.task_soft_time_limit,
+    task_time_limit=settings.task_hard_time_limit,
     # task_reject_on_worker_lost is deliberately left OFF (the default).
     # With it enabled, a hard-killed worker's message is requeued
     # immediately by the broker. Our recovery model (M5) instead detects
@@ -96,6 +106,13 @@ def _assert_timing_config_is_consistent() -> None:
         + settings.lease_grace_seconds
         + settings.max_retry_countdown_seconds
     )
+    if settings.task_hard_time_limit <= settings.task_soft_time_limit:
+        raise ValueError(
+            f"task_time_limit ({settings.task_hard_time_limit}s) must exceed "
+            f"task_soft_time_limit ({settings.task_soft_time_limit}s), or a "
+            "timed-out handler is killed before it can record its failure"
+        )
+
     if settings.broker_visibility_timeout <= longest_in_flight:
         raise ValueError(
             "broker_visibility_timeout "

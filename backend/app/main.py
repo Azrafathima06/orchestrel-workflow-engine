@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.errors import register_error_handlers
+from app.api.middleware import BodySizeLimitMiddleware, TriggerRateLimitMiddleware
 from app.api.routes import health, runs, stats, workers, workflows
 from app.config import get_settings
 from app.logging import configure_logging, get_logger
@@ -13,6 +14,10 @@ from app.logging import configure_logging, get_logger
 settings = get_settings()
 configure_logging(settings)
 logger = get_logger(__name__)
+
+# Refuse to boot a production deployment that is still pointed at Compose
+# hostnames or an unset CORS allowlist.
+settings.assert_production_ready()
 
 
 @asynccontextmanager
@@ -34,12 +39,27 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Exact origins only — never a wildcard in production (enforced by
+    # assert_production_ready). allow_credentials is False because this API
+    # uses no cookies and no browser-managed auth: sending credentials would
+    # add risk with no capability.
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_headers=["Content-Type"],
+    )
+
+    # Public-demo protection. Registered after CORS so a rejected request
+    # still carries the headers a browser needs to read the error body.
+    app.add_middleware(
+        TriggerRateLimitMiddleware,
+        max_per_minute=settings.public_trigger_rate_per_minute,
+    )
+    app.add_middleware(
+        BodySizeLimitMiddleware,
+        max_bytes=settings.max_request_body_bytes,
     )
 
     @app.middleware("http")

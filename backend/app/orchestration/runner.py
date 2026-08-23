@@ -17,17 +17,22 @@ reclaimed cannot overwrite newer state.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import signal
 import socket
+import threading
 import traceback
 import uuid
 from typing import Any
 
+from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import Integer, cast, func, select, update
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
+from app.core.errors import TaskTimeout
 from app.core.states import AttemptStatus, TaskStatus
 from app.db.models import TaskAttempt, TaskRun
 from app.handlers import get_handler
@@ -55,6 +60,52 @@ def worker_identity() -> str:
 
 class OutputTooLarge(Exception):
     """A handler returned more JSON than we are willing to persist."""
+
+
+@contextlib.contextmanager
+def handler_time_limit(seconds: int):
+    """Interrupt a handler that overruns its task's configured timeout_seconds.
+
+    This is what makes `timeout_seconds` mean something. Before it existed,
+    the value only sized the recovery lease: a runaway handler kept burning
+    CPU while the lease expired and the sweeper minted a NEW attempt, so a
+    single request could multiply into several concurrent runaway loops on
+    one machine.
+
+    SIGALRM, deliberately: it interrupts the running Python frame in the
+    process actually doing the work, so the CPU stops immediately and the
+    exception travels the ordinary failure path (TaskTimeout subclasses
+    RetriableError, so accounting, backoff, and the CAS completion guard all
+    behave exactly as they do for any other retriable error).
+
+    Falls back to no-op when it cannot arm — a non-main thread, or a
+    platform without SIGALRM. Celery's own soft/hard `task_time_limit` is
+    configured as the backstop for that case, so the guarantee degrades to
+    the worker level rather than disappearing.
+    """
+    if seconds <= 0 or threading.current_thread() is not threading.main_thread():
+        yield
+        return
+    if not hasattr(signal, "SIGALRM"):
+        yield
+        return
+
+    def _on_alarm(signum, frame):
+        raise TaskTimeout(f"handler exceeded its {seconds}s timeout")
+
+    previous = signal.signal(signal.SIGALRM, _on_alarm)
+    signal.alarm(seconds)
+    try:
+        yield
+    except SoftTimeLimitExceeded as exc:
+        # The Celery backstop fired first (only possible if the per-task
+        # limit is longer than the worker-wide one). Present it as the same
+        # domain error so attempt accounting does not depend on which
+        # mechanism caught the overrun.
+        raise TaskTimeout(f"handler exceeded its {seconds}s timeout") from exc
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
 
 
 def _serialize_output(value: Any, limit: int) -> dict[str, Any]:
@@ -110,7 +161,8 @@ def execute_task_attempt(
             worker_id=worker_id,
             logger=log,
         )
-        raw_output = handler_fn(context, claim["params"], claim["upstream_outputs"])
+        with handler_time_limit(claim["timeout_seconds"]):
+            raw_output = handler_fn(context, claim["params"], claim["upstream_outputs"])
         output = _serialize_output(raw_output, settings.max_task_output_bytes)
     except Exception as exc:
         _complete_failure(
@@ -195,6 +247,7 @@ def _claim(
             "params": dict(task.params or {}),
             "attempt_number": task.attempt_count,
             "upstream_outputs": upstream_outputs,
+            "timeout_seconds": int(task.timeout_seconds or 0),
         }
         session.commit()
 

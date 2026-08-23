@@ -1,0 +1,72 @@
+# Orchestrel — Render Blueprint
+#
+# Declares the two services that can be safely described in source. The
+# Key Value (Redis-compatible) broker is created MANUALLY in the Render
+# dashboard and its internal URL pasted in as BROKER_URL: the blueprint
+# spec requires `ipAllowList` for `type: keyvalue` and does not enumerate a
+# free plan for it, so declaring it here risks provisioning a paid instance.
+# See docs/deployment.md.
+#
+# No secret values appear in this file. Every connection string is marked
+# `sync: false`, which makes Render prompt for it once in the dashboard.
+
+services:
+  # ---------------------------------------------------------------- frontend
+  - type: web
+    name: orchestrel
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      # Public configuration, not a secret: the browser must know where the
+      # API lives. Set to the orchestrel-api URL after its first deploy.
+      # The production build fails loudly if this is missing (vite.config.ts).
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      # React Router owns client-side routing. Without this, a direct visit
+      # or refresh on /runs/<id> asks Render for a file that does not exist.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # ----------------------------------------------------------------- backend
+  - type: web
+    name: orchestrel-api
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    # /health is deliberate. It touches neither PostgreSQL nor the broker,
+    # so Render's continuous probing cannot keep Neon's compute awake — Neon
+    # free autosuspends after 5 minutes idle and bills from a 100 CU-hour
+    # monthly budget. /ready does hit both, and stays an on-demand endpoint
+    # for the dashboard's status cluster.
+    healthCheckPath: /health
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      # Neon pooled connection (-pooler host) for application queries.
+      - key: DATABASE_URL
+        sync: false
+      # Neon direct/unpooled connection for Alembic migrations and seeding.
+      - key: DATABASE_DIRECT_URL
+        sync: false
+      # Render Key Value internal URL (created manually).
+      - key: BROKER_URL
+        sync: false
+      # Exact static-site origin, e.g. https://orchestrel.onrender.com
+      # Never a wildcard: the app refuses to boot on "*" in production.
+      - key: CORS_ORIGINS
+        sync: false
+      # Public-demo protection. Safe to keep declarative — no secrets.
+      - key: PUBLIC_TRIGGER_RATE_PER_MINUTE
+        value: "10"
+      - key: MAX_ACTIVE_RUNS
+        value: "10"
+      - key: MAX_REQUEST_BODY_BYTES
+        value: "16384"

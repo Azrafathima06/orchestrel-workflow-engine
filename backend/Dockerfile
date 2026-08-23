@@ -26,14 +26,22 @@ COPY app ./app
 COPY alembic ./alembic
 COPY alembic.ini ./alembic.ini
 COPY workflows ./workflows
+# Procfile + entrypoint drive the production process group (see entrypoint.sh).
+COPY Procfile ./Procfile
+COPY entrypoint.sh ./entrypoint.sh
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
 ENV PATH="/opt/venv/bin:${PATH}"
 
+RUN chmod +x /app/entrypoint.sh
+
 RUN useradd --create-home --uid 1000 appuser
 USER appuser
 
+# Documentation only. In production Render injects PORT (default 10000) and
+# the entrypoint binds ${PORT:-10000}; Compose overrides the command and
+# publishes 8000 locally.
 EXPOSE 8000
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["./entrypoint.sh"]

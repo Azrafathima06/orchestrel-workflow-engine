@@ -26,10 +26,16 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# The app's own settings are the single source of truth for DATABASE_URL —
-# migrations must run against exactly the database the application uses,
-# not a value hand-copied into alembic.ini.
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# The app's own settings are the single source of truth — migrations must
+# run against exactly the database the application uses, not a value
+# hand-copied into alembic.ini.
+#
+# `migration_database_url` prefers DATABASE_DIRECT_URL when set. Neon's
+# pooled endpoint runs PgBouncer in transaction mode, which is fine for
+# ordinary queries but is not what its own documentation recommends for
+# DDL; the direct endpoint is. Locally there is only one endpoint, so this
+# resolves to DATABASE_URL and nothing changes.
+config.set_main_option("sqlalchemy.url", get_settings().migration_database_url)
 
 target_metadata = Base.metadata
 

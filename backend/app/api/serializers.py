@@ -18,8 +18,32 @@ from app.api.schemas import (
     TaskRunSummary,
     WorkflowEdge,
 )
+from app.config import get_settings
 from app.core.states import AttemptStatus
 from app.db.models import TaskAttempt, TaskRun, WorkflowRun
+
+settings = get_settings()
+
+# Absolute paths inside the container add nothing for a reader and leak the
+# deployment's internal layout. The frames themselves are genuinely useful
+# observability, so we keep them and rewrite only the path prefix.
+_PATH_PREFIXES = ("/app/", "/opt/venv/lib/python3.12/site-packages/")
+
+
+def sanitize_traceback(text: str | None) -> str | None:
+    """Strip absolute container paths from a persisted traceback.
+
+    Development keeps full paths (they are clickable in an editor);
+    production shows repo-relative frames only. Never touches the exception
+    type or message, which are the parts a viewer actually reasons about.
+    """
+    if not text or not settings.is_production:
+        return text
+
+    cleaned = text
+    for prefix in _PATH_PREFIXES:
+        cleaned = cleaned.replace(f'File "{prefix}', 'File "')
+    return cleaned
 
 
 def spec_snapshot_to_edges(spec: dict[str, Any]) -> list[WorkflowEdge]:
@@ -167,7 +191,7 @@ def task_to_detail(session: Session, task: TaskRun) -> TaskRunDetail:
                 duration_ms=a.duration_ms,
                 error_type=a.error_type,
                 error_message=a.error_message,
-                traceback=a.traceback,
+                traceback=sanitize_traceback(a.traceback),
                 logs=a.logs,
             )
             for a in attempts

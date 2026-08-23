@@ -55,6 +55,9 @@ class WorkflowSummary(BaseModel):
     description: str | None
     version: int
     is_active: bool
+    # False for fault-injection workflows: still listed and inspectable,
+    # but not triggerable through the public API.
+    is_public: bool = True
     task_count: int
     last_run: RunSummary | None
     recent_success_count: int
@@ -80,6 +83,7 @@ class WorkflowDetail(BaseModel):
     description: str | None
     version: int
     is_active: bool
+    is_public: bool = True
     spec: dict[str, Any]
     params_schema: dict[str, Any]
     nodes: list[WorkflowNode]

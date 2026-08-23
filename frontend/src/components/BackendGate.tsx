@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/Button";
 
 const RETRY_SCHEDULE_MS = [2000, 3000, 5000, 8000, 12000];
 const STEADY_RETRY_MS = 10000;
-const UNREACHABLE_AFTER_MS = 120_000;
+// Render free web services spin down after 15 minutes idle and take about
+// a minute to restart; migrations, seeding, and Neon's own wake-from-suspend
+// add to that. Budget generously — giving up early on a cold start would
+// show a failure where the system is working correctly.
+const UNREACHABLE_AFTER_MS = 180_000;
 const PING_TIMEOUT_MS = 4000;
 
 type GateState = "checking" | "waking" | "ready" | "unreachable";

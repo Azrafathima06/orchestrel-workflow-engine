@@ -60,6 +60,7 @@ export interface WorkflowSummary {
   description: string | null;
   version: number;
   is_active: boolean;
+  is_public: boolean;
   task_count: number;
   last_run: RunSummary | null;
   recent_success_count: number;
@@ -85,6 +86,7 @@ export interface WorkflowDetail {
   description: string | null;
   version: number;
   is_active: boolean;
+  is_public: boolean;
   /** Raw spec document; shape not otherwise typed here. */
   spec: Record<string, unknown>;
   params_schema: Record<string, unknown>;

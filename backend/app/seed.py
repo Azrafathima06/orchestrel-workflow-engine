@@ -21,7 +21,7 @@ from sqlalchemy import select
 from app.core.dag import validate_dag
 from app.core.spec import WorkflowSpec
 from app.db.models import WorkflowDefinition
-from app.db.session import SessionLocal
+from app.db.session import create_direct_session_factory
 from app.handlers import handler_names
 from app.logging import configure_logging, get_logger
 
@@ -52,8 +52,16 @@ def load_spec(path: Path) -> WorkflowSpec:
     return spec
 
 
-def seed(session_factory=SessionLocal, workflows_dir: Path = WORKFLOWS_DIR) -> dict[str, str]:
-    """Upsert every workflow definition. Returns {key: created|updated|unchanged}."""
+def seed(session_factory=None, workflows_dir: Path = WORKFLOWS_DIR) -> dict[str, str]:
+    """Upsert every workflow definition. Returns {key: created|updated|unchanged}.
+
+    Defaults to the direct (unpooled) connection: seeding runs once at
+    startup, before the API begins serving, and has no reason to occupy a
+    slot in the request-path pool. Tests pass their own factory.
+    """
+    if session_factory is None:
+        session_factory = create_direct_session_factory()
+
     paths = sorted(workflows_dir.glob("*.json"))
     if not paths:
         logger.warning("seed_no_workflows_found", directory=str(workflows_dir))

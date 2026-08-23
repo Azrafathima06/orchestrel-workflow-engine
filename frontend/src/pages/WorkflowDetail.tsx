@@ -1,6 +1,7 @@
-import { Loader2, Play } from "lucide-react";
+import { Loader2, Play, ShieldAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { ApiError } from "@/api/client";
 import { useTriggerRun, useWorkflow } from "@/api/queries";
 import type { TaskRunSummary } from "@/api/types";
 import { DagView } from "@/components/dag/DagView";
@@ -179,23 +180,47 @@ export function WorkflowDetail() {
 
         <div className="space-y-4">
           <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4">
-            <h2 className="label-eyebrow mb-3">Trigger a run</h2>
-            <ParamsForm
-              paramsSchema={data.params_schema}
-              submitting={trigger.isPending}
-              onSubmit={(params) => {
-                trigger.mutate(
-                  { params },
-                  {
-                    onSuccess: (run) => navigate(`/runs/${run.id}`),
-                  },
-                );
-              }}
-            />
-            {trigger.isError && (
-              <p className="mt-2 text-xs text-[var(--color-status-failed)]">
-                Couldn't start the run. Please try again.
-              </p>
+            {data.is_public ? (
+              <>
+                <h2 className="label-eyebrow mb-3">Trigger a run</h2>
+                <ParamsForm
+                  paramsSchema={data.params_schema}
+                  submitting={trigger.isPending}
+                  onSubmit={(params) => {
+                    trigger.mutate(
+                      { params },
+                      {
+                        onSuccess: (run) => navigate(`/runs/${run.id}`),
+                      },
+                    );
+                  }}
+                />
+                {trigger.isError && (
+                  <p className="mt-2 text-xs text-[var(--color-status-failed)]">
+                    {trigger.error instanceof ApiError
+                      ? trigger.error.message
+                      : "Couldn't start the run. Please try again."}
+                  </p>
+                )}
+              </>
+            ) : (
+              // Fault-injection workflows stay fully visible and inspectable
+              // — the DAG, task table, and any past runs all render — but
+              // deliberately expose no Run button. The API enforces this too;
+              // hiding the control just avoids offering an action that would
+              // be refused.
+              <>
+                <h2 className="label-eyebrow mb-2">Fault-injection workflow</h2>
+                <div className="flex items-start gap-2 border-l-2 border-[var(--color-status-retrying)] pl-2.5">
+                  <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[var(--color-status-retrying)]" />
+                  <p className="text-xs leading-relaxed text-[var(--color-text-secondary)]">
+                    This workflow exists to prove worker-loss recovery by killing a
+                    worker mid-task. It isn't triggerable from the public demo, where
+                    a deliberately heavy workload would degrade the shared instance.
+                    Run it locally with the recovery-test Compose overlay.
+                  </p>
+                </div>
+              </>
             )}
           </div>
 

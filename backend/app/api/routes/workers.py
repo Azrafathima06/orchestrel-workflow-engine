@@ -20,6 +20,8 @@ from app.db.session import get_db
 router = APIRouter(prefix="/api/v1/workers", tags=["workers"])
 
 # Thresholds for the derived liveness label, measured against last_seen_at.
+MAX_WORKERS = 100
+
 ACTIVE_WITHIN_SECONDS = 120
 IDLE_WITHIN_SECONDS = 1800
 
@@ -46,8 +48,10 @@ def list_workers(db: Session = Depends(get_db)) -> list[WorkerObservation]:
                 extract(epoch FROM (now() - last_seen_at)) AS age_seconds
               FROM activity
              ORDER BY last_seen_at DESC
+             LIMIT :max_workers
             """
-        )
+        ),
+        {"max_workers": MAX_WORKERS},
     ).all()
 
     observations = []

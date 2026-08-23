@@ -6,25 +6,36 @@
     "fail_until": {
       "type": "integer",
       "default": 3,
-      "description": "flaky_fetch succeeds on this attempt number; higher than max_attempts exhausts retries"
+      "minimum": 1,
+      "maximum": 5,
+      "description": "flaky_fetch succeeds on this attempt number; set above max_attempts (4) to demonstrate retry exhaustion"
     }
   },
   "defaults": {
-    "retry": { "max_attempts": 1 },
+    "retry": {
+      "max_attempts": 1
+    },
     "timeout_seconds": 120
   },
   "tasks": [
     {
       "key": "prepare",
       "handler": "retry.prepare",
-      "params": { "seed": 11, "record_count": 600 },
+      "params": {
+        "seed": 11,
+        "record_count": 600
+      },
       "depends_on": []
     },
     {
       "key": "flaky_fetch",
       "handler": "retry.flaky_fetch",
-      "params": { "fail_until": 3 },
-      "depends_on": ["prepare"],
+      "params": {
+        "fail_until": 3
+      },
+      "depends_on": [
+        "prepare"
+      ],
       "retry": {
         "max_attempts": 4,
         "backoff_seconds": 2,
@@ -37,7 +48,9 @@
       "key": "persist",
       "handler": "retry.persist",
       "params": {},
-      "depends_on": ["flaky_fetch"]
+      "depends_on": [
+        "flaky_fetch"
+      ]
     }
   ]
 }

@@ -1,0 +1,10 @@
+# Process group for the single Render Web Service. Render's free tier has no
+# Background Workers, so the API, exactly one Celery worker, and exactly one
+# Celery Beat are co-located here. honcho supervises them; see entrypoint.sh.
+#
+# Only `web` binds a port. concurrency=1 keeps one execution slot per
+# process so worker_id ("hostname:pid") stays a truthful one-to-one identity,
+# and keeps memory predictable in a shared instance.
+web: uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-10000}
+worker: celery -A app.worker.celery_app worker --loglevel=info --concurrency=1 -Q tasks,orchestrator
+beat: celery -A app.worker.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule

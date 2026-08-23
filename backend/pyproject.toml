@@ -14,6 +14,12 @@ dependencies = [
     "redis>=5.1,<6",
     "alembic>=1.14,<2",
     "celery>=5.4,<6",
+    # Supervises web + worker + beat inside the single production Web
+    # Service (Render's free tier has no Background Workers). Chosen over
+    # supervisord because it terminates the whole process group when any
+    # child exits, so a dead API takes the container down instead of
+    # leaving it superficially healthy.
+    "honcho>=2.0,<3",
 ]
 
 [dependency-groups]
