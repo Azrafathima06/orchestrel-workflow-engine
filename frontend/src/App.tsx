@@ -1,5 +1,6 @@
 import { Route, Routes } from "react-router-dom";
 import { AppShell } from "@/components/shell/AppShell";
+import { Landing } from "@/pages/Landing";
 import { Overview } from "@/pages/Overview";
 import { RunDetail } from "@/pages/RunDetail";
 import { Runs } from "@/pages/Runs";
@@ -10,8 +11,13 @@ import { Workers } from "@/pages/Workers";
 export function App() {
   return (
     <Routes>
+      {/* The marketing/orientation page sits outside AppShell: a first-time
+          visitor gets one clear next step rather than a navigation tree for
+          a product they have not met yet. */}
+      <Route path="/" element={<Landing />} />
+
       <Route element={<AppShell />}>
-        <Route path="/" element={<Overview />} />
+        <Route path="/dashboard" element={<Overview />} />
         <Route path="/workflows" element={<Workflows />} />
         <Route path="/workflows/:key" element={<WorkflowDetail />} />
         <Route path="/runs" element={<Runs />} />

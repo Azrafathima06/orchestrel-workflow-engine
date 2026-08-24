@@ -57,9 +57,17 @@ export function DagNode({ data }: { data: DagNodeData }) {
   return (
     <div
       className={cn(
-        "w-[168px] rounded-[var(--radius-md)] border bg-[var(--color-surface-1)] px-2.5 py-2 transition-colors",
-        selected ? "border-[var(--color-accent)] ring-1 ring-[var(--color-accent)]/40" : treatment.border,
+        "w-[190px] rounded-[var(--radius-md)] border px-3 py-2.5 transition-colors",
+        selected
+          ? "border-[var(--color-accent)] ring-2 ring-[var(--color-accent)]/35"
+          : treatment.border,
       )}
+      style={{
+        // A few percent of the status hue mixed into the panel surface. Enough
+        // that a branch's outcome reads from across the canvas; not so much
+        // that the node competes with its own text.
+        backgroundColor: `color-mix(in oklab, var(${meta.cssVar}) 9%, var(--color-surface-1))`,
+      }}
     >
       <Handle
         type="target"
@@ -74,15 +82,15 @@ export function DagNode({ data }: { data: DagNodeData }) {
 
       <div className="flex items-center gap-1.5">
         <span className="relative flex shrink-0 items-center justify-center">
-          <Icon className="h-3 w-3" style={{ color: `var(${meta.cssVar})` }} strokeWidth={2.25} />
+          <Icon className="h-3.5 w-3.5" style={{ color: `var(${meta.cssVar})` }} strokeWidth={2.25} />
           {treatment.pulse && (
             <span
-              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-pulse rounded-full"
+              className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 animate-live rounded-full"
               style={{ backgroundColor: `var(${meta.cssVar})` }}
             />
           )}
         </span>
-        <span className="truncate font-mono text-[12.5px] text-[var(--color-text-primary)]">
+        <span className="truncate font-mono text-[13px] font-medium text-[var(--color-text-primary)]">
           {task.task_key}
         </span>
         {task.dispatch_count > 1 && (
@@ -92,7 +100,7 @@ export function DagNode({ data }: { data: DagNodeData }) {
         )}
       </div>
 
-      <div className="mt-1 flex items-center justify-between font-mono text-[10.5px] tabular-nums text-[var(--color-text-tertiary)]">
+      <div className="mt-1.5 flex items-center justify-between font-mono text-[11px] tabular-nums text-[var(--color-text-tertiary)]">
         <span>{durationLabel ?? meta.label}</span>
         {task.attempt_count > 1 && <span>#{task.attempt_count}</span>}
       </div>

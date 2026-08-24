@@ -3,8 +3,8 @@ import type { Edge } from "@xyflow/react";
 import type { WorkflowEdge } from "@/api/types";
 import { statusMeta } from "@/lib/status";
 
-const NODE_WIDTH = 168;
-const NODE_HEIGHT = 52;
+const NODE_WIDTH = 190;
+const NODE_HEIGHT = 58;
 
 export interface DagPosition {
   x: number;
@@ -32,7 +32,7 @@ export function layoutDag(
   statusByKey: Record<string, string> = {},
 ): { positions: Record<string, DagPosition>; edges: Edge[] } {
   const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: "LR", nodesep: 20, ranksep: 56 });
+  g.setGraph({ rankdir: "LR", nodesep: 26, ranksep: 72 });
   g.setDefaultEdgeLabel(() => ({}));
 
   for (const key of taskKeys) {

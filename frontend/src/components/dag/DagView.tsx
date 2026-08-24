@@ -42,9 +42,9 @@ export function DagView({ tasks, edges, selectedTaskKey, onSelectTask }: DagView
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => onSelectTask?.(node.id)}
         fitView
-        fitViewOptions={{ padding: 0.25 }}
+        fitViewOptions={{ padding: 0.18, maxZoom: 1.35 }}
         minZoom={0.3}
-        maxZoom={1.5}
+        maxZoom={2}
         proOptions={{ hideAttribution: true }}
         nodesConnectable={false}
         elementsSelectable

@@ -1,22 +1,25 @@
 import { Play, Workflow as WorkflowIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useWorkflows } from "@/api/queries";
+import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { TableSkeleton } from "@/components/ui/Skeleton";
 import { formatRelativeTime } from "@/lib/format";
+import { compareWorkflows, workflowGuide } from "@/lib/workflowGuide";
 
 export function Workflows() {
   const { data, isLoading, isError, refetch } = useWorkflows();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-6">
-      <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
-        Workflows
-      </h1>
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+      <PageHeader
+        title="Workflows"
+        subtitle="Every workflow definition seeded into this engine. Each one is a DAG of tasks built to demonstrate a specific execution behaviour — open one to see its graph and run it."
+      />
 
-      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+      <div className="panel overflow-hidden">
         {isLoading && <TableSkeleton rows={5} columns={4} />}
         {isError && <ErrorState onRetry={() => refetch()} />}
 
@@ -30,7 +33,7 @@ export function Workflows() {
 
         {data && data.length > 0 && (
           <div className="divide-y divide-[var(--color-border-subtle)]">
-            {data.map((wf) => (
+            {[...data].sort((a, b) => compareWorkflows(a.key, b.key)).map((wf) => (
               <Link
                 key={wf.key}
                 to={`/workflows/${wf.key}`}
@@ -45,11 +48,9 @@ export function Workflows() {
                       {wf.key}
                     </span>
                   </div>
-                  {wf.description && (
-                    <p className="mt-0.5 truncate text-xs text-[var(--color-text-tertiary)]">
-                      {wf.description}
-                    </p>
-                  )}
+                  <p className="mt-1 line-clamp-2 text-[12.5px] leading-snug text-[var(--color-text-secondary)]">
+                    {workflowGuide(wf.key)?.blurb ?? wf.description}
+                  </p>
                 </div>
 
                 <span className="hidden shrink-0 font-mono text-xs tabular-nums text-[var(--color-text-tertiary)] sm:block">

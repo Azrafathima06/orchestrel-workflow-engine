@@ -3,54 +3,57 @@
 /* ---------------------------------------------------------------------
    Design tokens — Orchestrel.
 
-   A technical control surface, not a generated SaaS dashboard: dense,
-   quiet, typographically driven. Hierarchy comes from size/weight/spacing,
-   not from a rainbow of accent colors. The one accent is reserved for
-   interactive affordances; status meaning is carried by its own small
-   palette, always paired with an icon and a label.
+   A control surface for a workflow engine: dense and typographically
+   driven, but not colourless. Hierarchy comes from size, weight and
+   spacing; the accent marks interactive affordances; status carries its
+   own saturated palette because reading a DAG at a glance is the single
+   most important thing this UI does.
 
-   Typography deliberately leads with the platform's own system font
-   (San Francisco / Segoe UI / Roboto depending on OS) rather than a
-   packaged web font — that IS "editor UI, modern operating system"
-   typography, not a fallback for one.
+   Surfaces are tinted ink-blue rather than neutral charcoal — the small
+   amount of chroma is what stops large dark areas from reading as flat
+   black. Elevation is a real ramp: each step is both lighter and very
+   slightly more chromatic.
    ------------------------------------------------------------------- */
 @theme {
   --font-sans:
-    system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    "Inter var", Inter, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", sans-serif;
   --font-mono:
-    ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono", Menlo, monospace;
+    "JetBrains Mono", ui-monospace, "SF Mono", "Cascadia Code", "Roboto Mono",
+    Menlo, monospace;
 
-  /* Surfaces — neutral charcoal, one step apart in lightness */
-  --color-surface-0: oklch(14.5% 0.005 260); /* page background */
-  --color-surface-1: oklch(18% 0.006 260); /* panels */
-  --color-surface-2: oklch(22.5% 0.007 260); /* raised / hover */
-  --color-surface-3: oklch(27% 0.008 260); /* active / pressed */
-  --color-border: oklch(29% 0.008 260);
-  --color-border-subtle: oklch(22% 0.006 260);
+  /* Surfaces — tinted ink, one clear step apart in lightness */
+  --color-surface-0: oklch(17% 0.018 265); /* page background */
+  --color-surface-1: oklch(21% 0.021 265); /* panels */
+  --color-surface-2: oklch(26% 0.024 265); /* raised / hover */
+  --color-surface-3: oklch(31% 0.026 265); /* active / pressed */
+  --color-border: oklch(35% 0.028 265);
+  --color-border-subtle: oklch(28% 0.022 265);
 
-  /* Text */
-  --color-text-primary: oklch(93% 0.003 260);
-  --color-text-secondary: oklch(70% 0.006 260);
-  --color-text-tertiary: oklch(50% 0.007 260);
+  /* Text — raised contrast; the old tertiary was below comfortable reading */
+  --color-text-primary: oklch(96% 0.004 265);
+  --color-text-secondary: oklch(78% 0.014 265);
+  --color-text-tertiary: oklch(62% 0.016 265);
 
-  /* Accent — restrained indigo, not SaaS-gradient blue */
-  --color-accent: oklch(62% 0.13 258);
-  --color-accent-hover: oklch(67% 0.13 258);
-  --color-accent-subtle: oklch(26% 0.045 258);
+  /* Accent — a confident violet-indigo, used for real rather than hinted at */
+  --color-accent: oklch(67% 0.185 275);
+  --color-accent-hover: oklch(74% 0.185 275);
+  --color-accent-subtle: oklch(32% 0.08 275);
 
-  /* Status semantics — quiet confidence, not neon */
-  --color-status-pending: oklch(52% 0.006 260);
-  --color-status-queued: oklch(60% 0.07 250);
-  --color-status-running: oklch(62% 0.12 250);
-  --color-status-retrying: oklch(70% 0.13 75);
-  --color-status-succeeded: oklch(65% 0.11 155);
-  --color-status-failed: oklch(62% 0.16 25);
-  --color-status-upstream-failed: oklch(66% 0.1 70);
-  --color-status-cancelled: oklch(46% 0.006 260);
+  /* Status semantics — saturated enough to read instantly on a DAG canvas */
+  --color-status-pending: oklch(58% 0.012 265);
+  --color-status-queued: oklch(70% 0.1 245);
+  --color-status-running: oklch(74% 0.15 230);
+  --color-status-retrying: oklch(80% 0.15 72);
+  --color-status-succeeded: oklch(74% 0.16 155);
+  --color-status-failed: oklch(66% 0.2 22);
+  --color-status-upstream-failed: oklch(74% 0.13 58);
+  --color-status-cancelled: oklch(52% 0.012 265);
 
   --radius-sm: 5px;
   --radius-md: 7px;
-  --radius-lg: 9px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
 }
 
 html {
@@ -58,7 +61,22 @@ html {
 }
 
 body {
-  background: var(--color-surface-0);
+  /* Two very wide, very dilute radial washes. They are what give the page
+     depth without introducing a "gradient hero" look: at any given point
+     the shift is only a percent or two of lightness. */
+  background:
+    radial-gradient(
+      ellipse 90rem 50rem at 12% -8%,
+      oklch(28% 0.055 275 / 0.5),
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 70rem 44rem at 92% 4%,
+      oklch(26% 0.045 200 / 0.34),
+      transparent 62%
+    ),
+    var(--color-surface-0);
+  background-attachment: fixed;
   color: var(--color-text-primary);
   font-family: var(--font-sans);
   font-feature-settings: "tnum" 1, "cv11" 1;
@@ -76,9 +94,56 @@ body {
 .label-eyebrow {
   font-size: 10.5px;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--color-text-tertiary);
+}
+
+/* The repeated panel treatment. A barely-visible top-edge highlight reads
+   as a light source above the page, which is what separates a stack of
+   panels from a stack of rectangles. */
+.panel {
+  position: relative;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background:
+    linear-gradient(
+      to bottom,
+      oklch(100% 0 0 / 0.028),
+      oklch(100% 0 0 / 0) 92px
+    ),
+    var(--color-surface-1);
+  box-shadow:
+    0 1px 2px oklch(0% 0 0 / 0.32),
+    0 8px 24px -12px oklch(0% 0 0 / 0.5);
+}
+
+/* Page-title scale. The old UI set every heading at 15px, which left the
+   product with no typographic hierarchy at all. */
+.page-title {
+  font-size: 25px;
+  font-weight: 640;
+  letter-spacing: -0.022em;
+  line-height: 1.15;
+  color: var(--color-text-primary);
+}
+
+.page-subtitle {
+  margin-top: 5px;
+  max-width: 62ch;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--color-text-secondary);
+}
+
+/* Numerals in the stat strip. Large, tight, tabular. */
+.stat-value {
+  font-family: var(--font-mono);
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
 }
 
 ::selection {
@@ -97,4 +162,48 @@ body {
   background: var(--color-border);
   border-radius: 999px;
   border: 2px solid var(--color-surface-0);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-surface-3);
+}
+
+/* Slow breathing pulse for live (running/retrying) indicators. Tailwind's
+   own `animate-pulse` is a fast opacity blink that reads as a loading
+   skeleton; this reads as a heartbeat. */
+@keyframes orchestrel-live {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.82);
+  }
+}
+.animate-live {
+  animation: orchestrel-live 1.7s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Expanding ring behind a live node's status dot. */
+@keyframes orchestrel-ping {
+  0% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(2.6);
+  }
+}
+.animate-ring {
+  animation: orchestrel-ping 1.7s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-live,
+  .animate-ring {
+    animation: none;
+  }
 }

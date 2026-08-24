@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useRuns, useWorkflows } from "@/api/queries";
 import type { WorkflowStatus } from "@/api/types";
+import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { TaskCountsStrip } from "@/components/TaskCountsStrip";
 import { Button } from "@/components/ui/Button";
@@ -55,12 +56,12 @@ export function Runs() {
   const items = runs.data?.pages.flatMap((p) => p.items) ?? [];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
-          Runs
-        </h1>
-        <div className="flex items-center gap-2">
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+      <PageHeader
+        title="Run history"
+        subtitle="Every execution this engine has performed, newest first. Open a run to see its graph, per-task state and full attempt timeline."
+        actions={
+          <>
           <Select value={status} onChange={(v) => setStatus(v as WorkflowStatus | "")}>
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -76,10 +77,11 @@ export function Runs() {
               </option>
             ))}
           </Select>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+      <div className="panel overflow-hidden">
         {runs.isLoading && <TableSkeleton rows={8} columns={7} />}
         {runs.isError && <ErrorState onRetry={() => runs.refetch()} />}
 

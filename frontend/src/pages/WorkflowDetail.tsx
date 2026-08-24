@@ -5,11 +5,13 @@ import { ApiError } from "@/api/client";
 import { useTriggerRun, useWorkflow } from "@/api/queries";
 import type { TaskRunSummary } from "@/api/types";
 import { DagView } from "@/components/dag/DagView";
+import { PageHeader } from "@/components/PageHeader";
 import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/Button";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatRelativeTime, formatShortId } from "@/lib/format";
+import { workflowGuide } from "@/lib/workflowGuide";
 
 interface ParamSchemaField {
   type?: string;
@@ -105,7 +107,7 @@ export function WorkflowDetail() {
 
   if (isLoading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-4 p-6">
+      <div className="mx-auto max-w-7xl space-y-4 p-6">
         <Skeleton className="h-8 w-64" />
         <Skeleton className="h-80" />
       </div>
@@ -117,30 +119,44 @@ export function WorkflowDetail() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 p-6">
-      <div>
-        <div className="flex items-baseline gap-2">
-          <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
-            {data.name}
-          </h1>
-          <span className="font-mono text-xs text-[var(--color-text-tertiary)]">
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+      <PageHeader
+        title={data.name}
+        subtitle={workflowGuide(data.key)?.blurb ?? data.description ?? undefined}
+        actions={
+          <span className="font-mono text-[11.5px] text-[var(--color-text-tertiary)]">
             {data.key} · v{data.version} · {data.nodes.length} tasks
           </span>
-        </div>
-        {data.description && (
-          <p className="mt-1.5 max-w-2xl text-[13px] text-[var(--color-text-secondary)]">
-            {data.description}
-          </p>
-        )}
-      </div>
+        }
+      />
+
+      {/* The API description is the engine's own technical account of the
+          workflow; the header above carries the one-line version. Both are
+          worth showing — they are written for different readers. */}
+      {data.description && (
+        <p className="max-w-4xl text-[13px] leading-relaxed text-[var(--color-text-tertiary)]">
+          {data.description}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-4">
-          <div className="h-80 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
-            <DagView tasks={previewTasks} edges={data.edges} />
+          <div className="flex h-96 flex-col panel overflow-hidden">
+            <div className="border-b border-[var(--color-border-subtle)] px-4 py-2.5">
+              <h2 className="text-[13px] font-semibold text-[var(--color-text-primary)]">
+                Task graph
+              </h2>
+              <p className="mt-0.5 text-[12px] text-[var(--color-text-tertiary)]">
+                Arrows point from a task to the tasks that depend on it. Nothing
+                has run yet — trigger a run to watch these nodes change state.
+              </p>
+            </div>
+            <div className="min-h-0 flex-1">
+              <DagView tasks={previewTasks} edges={data.edges} />
+            </div>
           </div>
 
-          <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+          <div className="panel overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -179,7 +195,7 @@ export function WorkflowDetail() {
         </div>
 
         <div className="space-y-4">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)] p-4">
+          <div className="panel p-4">
             {data.is_public ? (
               <>
                 <h2 className="label-eyebrow mb-3">Trigger a run</h2>
@@ -224,7 +240,7 @@ export function WorkflowDetail() {
             )}
           </div>
 
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+          <div className="panel">
             <div className="border-b border-[var(--color-border-subtle)] px-4 py-2.5">
               <h2 className="label-eyebrow">Recent runs</h2>
             </div>

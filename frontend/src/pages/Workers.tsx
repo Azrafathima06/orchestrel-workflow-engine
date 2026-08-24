@@ -1,5 +1,6 @@
 import { Server } from "lucide-react";
 import { useWorkers } from "@/api/queries";
+import { PageHeader } from "@/components/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { TableSkeleton } from "@/components/ui/Skeleton";
@@ -16,19 +17,17 @@ export function Workers() {
   const { data, isLoading, isError, refetch } = useWorkers();
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4 p-6">
-      <div>
-        <h1 className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
-          Workers observed executing tasks
-        </h1>
-        <p className="mt-1 max-w-2xl text-[13px] text-[var(--color-text-tertiary)]">
-          Derived from persisted task-attempt history — not a Celery remote-control heartbeat.
-          A worker that is running but idle looks identical to one that isn't running at all,
-          which is why liveness below reflects observed activity rather than an "online" claim.
-        </p>
-      </div>
+    <div className="mx-auto max-w-7xl space-y-6 p-6 lg:p-8">
+      <PageHeader
+        title="Workers"
+        subtitle={
+          "Processes observed executing tasks, derived from persisted attempt history rather than a Celery heartbeat. " +
+          "A worker that is running but idle looks identical to one that is not running at all, which is why liveness " +
+          "below reports observed activity instead of claiming a worker is online."
+        }
+      />
 
-      <div className="overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+      <div className="panel overflow-hidden">
         {isLoading && <TableSkeleton rows={4} columns={6} />}
         {isError && <ErrorState onRetry={() => refetch()} />}
 

@@ -6,6 +6,7 @@ import type { TaskRunSummary } from "@/api/types";
 import { ExecutionStrip } from "@/components/ExecutionStrip";
 import { StatusPill } from "@/components/StatusPill";
 import { TaskInspector } from "@/components/TaskInspector";
+import { DagLegend } from "@/components/dag/DagLegend";
 import { DagView } from "@/components/dag/DagView";
 import { Badge } from "@/components/ui/Badge";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -37,7 +38,7 @@ function TasksTable({
   onSelect: (key: string) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
+    <div className="overflow-x-auto panel">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-[var(--color-border-subtle)] text-left">
@@ -163,7 +164,7 @@ export function RunDetail() {
         </div>
         {run.error && <p className="mt-2 text-xs text-[var(--color-status-failed)]">{run.error}</p>}
 
-        <div className="mt-3 flex items-stretch divide-x divide-[var(--color-border-subtle)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)] px-4">
+        <div className="mt-3 flex items-stretch divide-x divide-[var(--color-border-subtle)] panel px-4">
           <RailSegment label="Tasks" value={`${run.task_counts.succeeded}/${run.task_counts.total}`} />
           <RailSegment label="Attempts" value={String(totalAttempts)} />
           <RailSegment label="Retries" value={String(run.retry_count)} />
@@ -196,13 +197,16 @@ export function RunDetail() {
             // page itself must never need to scroll to reach the fit-view
             // controls or reveal nodes below the fold.
             <div className="min-h-0 flex-1 p-6 pt-4">
-              <div className="h-full min-h-96 overflow-hidden rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface-1)]">
-                <DagView
-                  tasks={run.tasks}
-                  edges={run.edges}
-                  selectedTaskKey={selectedTaskKey}
-                  onSelectTask={selectTask}
-                />
+              <div className="flex h-full min-h-96 flex-col panel overflow-hidden">
+                <div className="min-h-0 flex-1">
+                  <DagView
+                    tasks={run.tasks}
+                    edges={run.edges}
+                    selectedTaskKey={selectedTaskKey}
+                    onSelectTask={selectTask}
+                  />
+                </div>
+                <DagLegend />
               </div>
             </div>
           ) : (
@@ -216,9 +220,16 @@ export function RunDetail() {
           {selectedTask ? (
             <TaskInspector runId={run.id} task={selectedTask} />
           ) : (
-            <p className="p-4 text-center text-xs text-[var(--color-text-tertiary)]">
-              Select a task to inspect its state, attempts, and dependencies.
-            </p>
+            <div className="p-6 text-center">
+              <p className="text-[13px] font-medium text-[var(--color-text-primary)]">
+                Task inspector
+              </p>
+              <p className="mt-1.5 text-[12.5px] leading-relaxed text-[var(--color-text-tertiary)]">
+                Click any node in the graph to see its status, the worker that
+                executed it, its duration, every attempt it made, and the output
+                it passed downstream.
+              </p>
+            </div>
           )}
         </div>
       </div>

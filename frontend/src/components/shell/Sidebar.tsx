@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink } from "react-router-dom";
 import { useHealth, useReady } from "@/api/queries";
 import { OrchestrelMark } from "@/components/OrchestrelMark";
 import { cn } from "@/lib/utils";
@@ -33,12 +33,16 @@ function SystemFooter() {
 export function Sidebar() {
   return (
     <aside className="flex w-52 shrink-0 flex-col border-r border-[var(--color-border-subtle)] bg-[var(--color-surface-1)] max-lg:hidden">
-      <div className="flex h-14 items-center gap-2.5 border-b border-[var(--color-border-subtle)] px-4">
+      <Link
+        to="/"
+        className="flex h-14 items-center gap-2.5 border-b border-[var(--color-border-subtle)] px-4 transition-colors hover:bg-[var(--color-surface-2)]"
+        title="Back to the overview page"
+      >
         <OrchestrelMark />
-        <span className="text-[15px] font-semibold tracking-tight text-[var(--color-text-primary)]">
+        <span className="text-[15px] font-semibold tracking-[-0.01em] text-[var(--color-text-primary)]">
           Orchestrel
         </span>
-      </div>
+      </Link>
 
       <nav className="flex flex-1 flex-col gap-px p-2">
         {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
