@@ -6,15 +6,20 @@ on a persisted exponential-backoff schedule, isolating permanent failures to the
 subgraph, and recovering work abandoned by a lost worker or a lost broker.
 
 <!-- LIVE_LINKS_START -->
-> **Live demo:** _deployment in progress — links land here._
+**[▶ Open the live demo](https://orchestrel.onrender.com)** — running on Render and Neon.
 <!-- LIVE_LINKS_END -->
 
 | | |
 |---|---|
-| **Live application** | _pending_ |
-| **API** | _pending_ |
-| **API documentation** | _pending_ (OpenAPI / Swagger at `/docs`) |
-| **Source** | https://github.com/Azrafathima06/orchestrel-workflow-engine |
+| **Live application** | <https://orchestrel.onrender.com> |
+| **API** | <https://orchestrel-api.onrender.com> |
+| **API documentation** | <https://orchestrel-api.onrender.com/docs> |
+| **Health / readiness** | [`/health`](https://orchestrel-api.onrender.com/health) · [`/ready`](https://orchestrel-api.onrender.com/ready) |
+| **Source** | <https://github.com/Azrafathima06/orchestrel-workflow-engine> |
+
+> The API runs on Render's free tier and sleeps after 15 minutes of inactivity. The first
+> request after an idle period takes up to a minute to wake it; the dashboard shows a waking
+> screen rather than an error while that happens.
 
 ![Orchestrel landing page](docs/screenshots/landing.jpg)
 

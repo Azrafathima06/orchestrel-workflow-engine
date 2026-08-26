@@ -179,6 +179,21 @@ Public configuration, not a secret — it is compiled into the browser bundle.
 Deploy the static site. Note its origin, e.g.
 `https://orchestrel.onrender.com`.
 
+> **Verify the JS bundle actually serves before moving on.** A first publish can
+> land incomplete — the CSS present, the JS returning 404 — which renders as a
+> blank page with no console error, because a `<script type="module">` that
+> 404s fails silently. Check it explicitly:
+>
+> ```bash
+> for p in $(curl -s https://orchestrel.onrender.com/ | grep -oE '/assets/[^"]+'); do
+>   printf '%s ' "$p"; curl -s -o /dev/null -w '%{http_code} %{content_type}\n' \
+>     "https://orchestrel.onrender.com$p"
+> done
+> ```
+>
+> Both assets must return `200`, with the JS as `application/javascript`. If the
+> JS 404s, redeploy with **Clear build cache & deploy** — that resolves it.
+
 ### 14. Exact `CORS_ORIGINS`
 
 Set `CORS_ORIGINS` on `orchestrel-api` to that exact origin — no trailing
