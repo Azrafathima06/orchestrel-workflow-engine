@@ -12,7 +12,7 @@ subgraph, and recovering work abandoned by a lost worker or a lost broker.
 | | |
 |---|---|
 | **Live application** | <https://orchestrel.onrender.com> |
-| **API** | <https://orchestrel-api.onrender.com> |
+| **API** | `https://orchestrel-api.onrender.com` — base URL; there is no page at the root, browse it via the docs below |
 | **API documentation** | <https://orchestrel-api.onrender.com/docs> |
 | **Health / readiness** | [`/health`](https://orchestrel-api.onrender.com/health) · [`/ready`](https://orchestrel-api.onrender.com/ready) |
 | **Source** | <https://github.com/Azrafathima06/orchestrel-workflow-engine> |
